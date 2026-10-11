@@ -1,1 +1,38 @@
-build
+# CMake build trees and generated files
+/build/
+/build-*/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+install_manifest.txt
+compile_commands.json
+
+# Compiled outputs
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dll
+*.dylib
+*.exe
+/zeek-dock
+/application_menu_config_test
+
+# Logs and crash dumps
+*.log
+core
+core.*
+*.core
+
+# Local configuration and editor state
+.config/
+.vscode/
+.idea/
+*.local.conf
+*.swp
+*.swo
+*~
+.DS_Store

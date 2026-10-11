@@ -107,30 +107,30 @@ void VersionChecker::setVersionStatus(VersionStatus status) {
   switch (status_) {
   case VersionStatus::Alpha:
     setIconName("dialog-warning");
-    setLabel("Warning: Alpha version");
+    setLabel("Warning: Zeek Dock alpha");
     infoDialog_.setIcon(QMessageBox::Warning);
-    infoDialog_.setText(QString("<p>Warning: You are using an alpha version of Crystal Dock. Please use the latest release instead:")
+    infoDialog_.setText(QString("<p>Zeek Dock is an alpha build. The linked release feed is Crystal Dock upstream, not Zeek Dock:")
                         + "<p><a href=\"https://github.com/dangvd/crystal-dock/releases\">https://github.com/dangvd/crystal-dock/releases</a>");
     break;
   case VersionStatus::Beta:
     setIconName("dialog-warning");
-    setLabel("Warning: Beta version");
+    setLabel("Warning: Zeek Dock beta");
     infoDialog_.setIcon(QMessageBox::Warning);
-    infoDialog_.setText(QString("<p>Warning: You are using a beta version of Crystal Dock. Please use the latest release instead:")
+    infoDialog_.setText(QString("<p>Zeek Dock is a beta build. The linked release feed is Crystal Dock upstream, not Zeek Dock:")
                         + "<p><a href=\"https://github.com/dangvd/crystal-dock/releases\">https://github.com/dangvd/crystal-dock/releases</a>");
     break;
   case VersionStatus::OutOfDate:
     setIconName("dialog-warning");
-    setLabel("Warning: Out-of-date version");
+    setLabel("Differs from Crystal Dock");
     infoDialog_.setIcon(QMessageBox::Warning);
-    infoDialog_.setText(QString("<p>Warning: You are using an out-of-date version of Crystal Dock. Please use the latest release instead:")
+    infoDialog_.setText(QString("<p>This version differs from the latest Crystal Dock upstream release. Zeek Dock releases are not checked:")
                         + "<p><a href=\"https://github.com/dangvd/crystal-dock/releases\">https://github.com/dangvd/crystal-dock/releases</a>");
     break;
   case VersionStatus::UpToDate:
     setIconName("dialog-ok", "dialog-information");
-    setLabel("Dock version: Up to date");
+    setLabel("Matches Crystal Dock");
     infoDialog_.setIcon(QMessageBox::Information);
-    infoDialog_.setText(QString("<p>You are using the latest release of Crystal Dock."));
+    infoDialog_.setText(QString("<p>This version matches the latest Crystal Dock upstream release. Zeek Dock releases are not checked."));
     break;
   }
 }

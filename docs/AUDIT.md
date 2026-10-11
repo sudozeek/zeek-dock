@@ -1,4 +1,6 @@
-# Crystal Dock - Audit Report (Phase 0)
+# Historical Crystal Dock Audit Notes (Phase 0)
+
+> Historical planning document. Its feature assessments, measurements, environment details, and proposed actions describe an earlier phase and are not claims about the current Zeek Dock code. For current verified behavior, see [README](../README.md) and [TESTING](TESTING.md).
 
 ## Executive Summary
 This audit evaluates upstream Crystal Dock (v2.17 alpha) against the project requirements specified in Section 1 of the Project Brief. Upstream provides a solid foundation with native Wayland LayerShell support and KWin integration via `org_kde_plasma_window_management`. However, several default configurations, live theme updates, settings controls, and window preview capabilities require modification or new implementation.
@@ -18,22 +20,9 @@ This audit evaluates upstream Crystal Dock (v2.17 alpha) against the project req
 
 ---
 
-## Verified System & Baseline Resource Metrics
+## Historical Environment Notes
 
-### Environment
-- **OS:** Arch Linux x86_64, Linux Kernel 7.0.0-rc7-1-mainline
-- **Compositor / DE:** KDE Plasma 6.7.5 (KWin Wayland)
-- **GPU:** Intel HD Graphics 4400 (Haswell), Mesa OpenGL driver
-- **Qt / Wayland:** Qt 6.12.0, LayerShellQt 6.7.5, Wayland Protocols 1.49
-
-### Installation & Wayland Protocol Access
-- **Installation Path:** Local user prefix `~/.local` (`~/.local/bin/crystal-dock`, `~/.local/share/applications/crystal-dock.desktop`).
-- **Wayland Protocol Access:** KWin grants `org_kde_plasma_window_management` access to `crystal-dock` when installed in `~/.local/share/applications/crystal-dock.desktop`. Uninstalled binary execution fails with missing protocol errors as intended by KWin security policies.
-
-### Baseline Resource Consumption (Unmodified Dock)
-- **Idle CPU Usage:** `0.0%` (verified via `top -b -n 5 -d 1`)
-- **Memory Footprint (VmRSS):** `87.1 MB` (`87,124 KiB`)
-- **Peak Memory (VmHWM):** `87.1 MB` (`87,120 KiB`)
+Machine-specific environment details, installation paths, and resource measurements from the original audit have been omitted. They were tied to one local test system and are not current project guarantees. See [README](../README.md) for the currently tested environment and [TESTING](TESTING.md) for the manual test checklist.
 
 ---
 

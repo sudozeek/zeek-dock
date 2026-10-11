@@ -76,7 +76,7 @@ DockPanel::DockPanel(MultiDockView* parent, MultiDockModel* model, int dockId)
       dockId_(dockId),
       aboutDialog_(QMessageBox::Information, "About Zeek Dock",
                    QString("<h3>Zeek Dock ") + kVersion + "</h3>"
-                   + "<p>Customized Dock for Zeek",
+                   + "<p>A modified version of Crystal Dock.",
                    QMessageBox::Ok, this, Qt::Tool),
       addPanelDialog_(this, model, dockId),
       appearanceSettingsDialog_(this, model),
@@ -1181,7 +1181,7 @@ void DockPanel::createMenu() {
 
   QMenu* helpMenu = menu_.addMenu(QIcon::fromTheme("help-contents"), "&Help");
   helpMenu->addAction(QIcon::fromTheme("help-contents"),
-                  QString("Online &Documentation"),
+                  QString("Crystal Dock Upstream &Documentation"),
                   this, SLOT(showOnlineDocumentation()));
   helpMenu->addAction(QIcon::fromTheme("help-about"), QString("A&bout Zeek Dock"), this,
       [this] {

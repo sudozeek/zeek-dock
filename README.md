@@ -1,127 +1,104 @@
-# 🚀 Zeek Dock
+# Zeek Dock
 
-**Zeek Dock** is a modern, ultra-smooth desktop dock and taskbar designed for Linux desktops on Wayland (optimized for KDE Plasma 6, Hyprland, Sway, and other modern Wayland compositors).
+An icon-only Linux dock that combines pinned launchers with a taskbar for running windows.
 
-It combines the aesthetic elegance of macOS and iOS docks with the productivity of Windows 11 taskbars, featuring live window hover previews, multi-instance window management, click-to-minimize, pure icon floating panels, and 60 FPS fluid auto-hide animations.
+![Zeek Dock running on KDE Plasma](images/zeek%20dock.png)
 
----
+> GIF placeholder: add a short interaction recording before release.
 
-## ✨ Features
+## Features
 
-### 🪟 Advanced Window Previews
-* **Live Thumbnails**: High-performance, real-time window frame capture using KDE Plasma 6's native `org.kde.KWin.ScreenShot2` D-Bus interface.
-* **Side-by-Side Multi-Window Layout**: Applications with multiple open windows display cards arranged horizontally side-by-side rather than stacked vertically.
-* **Modern Window Cards**:
-  * **Title Bar**: Window/application title with elision support.
-  * **Close Button**: Red **✕** button to close any individual window directly from the preview.
-  * **Live Screenshot Body**: Scaled, high-quality picture of the running window with graceful high-resolution application icon fallbacks.
-* **Auto-Hide Lock**: The dock remains securely visible and elevated while hovering over window previews, preventing frustrating disappearances on auto-hide panels.
-* **Elevated Positioning**: Previews float cleanly above the dock icons with generous margin spacing, never overlapping the panel.
+- Floating, transparent Flat2D icons-only panel is the fresh-install default.
+- Tracks running windows alongside pinned launchers; supports grouping, focus, and configurable click-to-minimize behavior.
+- Configurable dock position, zoom, panel appearance, and visibility modes: always visible, auto-hide, and intelligent auto-hide.
+- Optional panel components include the application menu, volume, Wi-Fi, battery, clock, calendar, trash, virtual desktop pager, and keyboard layout selector.
+- Optional hover window preview cards, disabled by default. On KWin, cards request thumbnails through `org.kde.KWin.ScreenShot2`; if capture is unavailable, the card remains with its title and application icon.
 
-### 📌 Full Taskbar & Window Management
-* **Dual Dock / Taskbar Mode**: Supports both pinned launcher applications and dynamic running window tracking.
-* **Click-to-Minimize & Focus**: Clicking an active application's dock icon instantly minimizes or restores the window.
-* **Running Indicators**: Sleek status dots indicating active state and count of open windows per application.
-* **Intelligent App Matching**: Resolves desktop entries across reverse-DNS naming, binary commands, and custom `.desktop` definitions.
+## What Is Different from Crystal Dock
 
-### 🎨 Visual Styles & Customization
-* **Icons-Only Mode**: Floating or docked pure-icon style without background container bars.
-* **iOS Glass Defaults**: Translucent frosted glass panel with customizable corner rounding, blur, and alpha transparency.
-* **Diverse Panel Styles**:
-  * Icons-Only (Floating & Non-Floating)
-  * Glass 3D
-  * Glass 2D
-  * Flat 2D
-  * Metal 2D
-* **Fluid 60 FPS Auto-Hide**: Ultra-smooth opacity fade transitions with an adjustable animation speed control slider.
-* **Interactive Parabolic Zoom**: Configurable magnification curve on mouse hover.
+Compared with the Crystal Dock baseline recorded in this repository, this fork changes the fresh panel defaults to a transparent, icons-only taskbar composition; adds click-to-minimize and scroll-to-cycle task settings; and adds configurable hover preview cards backed by KWin's ScreenShot2 D-Bus interface. These are code-level differences visible in this fork; this README makes no claims about features upstream cannot support.
 
-### 🧩 Modular Dock Applets
-* **Application Menu / Launcher**
-* **Window Task Manager**
-* **Volume Control & Audio Output**
-* **Network / Wi-Fi Manager**
-* **Battery & Power Indicator**
-* **Digital Clock & Calendar**
-* **Trash Can**
-* **Virtual Desktop Pager**
-* **Keyboard Layout Switcher**
+## Supported Environment
 
----
+Tested on KDE Plasma 6 Wayland on Arch Linux. Other Wayland compositors are not currently verified. Window management and live preview capture depend on compositor support; ScreenShot2 thumbnails are KWin-specific.
 
-## 🛠️ Build and Installation
+## Requirements
 
-### Dependencies
+- CMake 3.20 or newer and a C++20 compiler.
+- Qt 6 with DBus, Gui, Test, Widgets, and GuiPrivate development components. CMake requests Qt 6.6 or newer; Qt 6.9+ is the verified configuration for this build.
+- Wayland Client development files, version 1.22 or newer.
+- LayerShellQt 6.0 or newer.
 
-Zeek Dock requires **Qt 6**, **LayerShellQt 6**, **Wayland Client**, and **CMake**:
+On Arch Linux:
 
-#### Arch Linux / Manjaro
-```bash
-sudo pacman -S base-devel cmake qt6-base qt6-wayland layer-shell-qt wayland
+```sh
+sudo pacman -S --needed base-devel cmake qt6-base qt6-wayland layer-shell-qt wayland
 ```
 
-#### Fedora
-```bash
-sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtbase-private-devel layer-shell-qt-devel wayland-devel
-```
+## Build and Install
 
-#### Ubuntu / Debian (24.04+)
-```bash
-sudo apt install cmake g++ qt6-base-dev qt6-base-private-dev liblayershellqtinterface-dev libwayland-dev
-```
+Clone the public repository:
 
----
-
-### Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/zeek-dock.git
+```sh
+git clone https://github.com/sudozeek/zeek-dock.git
 cd zeek-dock
-
-# Configure and compile
-cmake -S src -B build -DCMAKE_INSTALL_PREFIX=/usr
-cmake --build build -j$(nproc)
-
-# Install system-wide
-sudo cmake --install build
 ```
 
-Alternatively, to install for your local user only:
-```bash
-cmake -S src -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local
-cmake --build build -j$(nproc)
+Build and install for the current user:
+
+```sh
+cmake -S src -B build -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+cmake --build build -j"$(nproc)"
 cmake --install build
 ```
 
----
+For a system-wide install, configure with `-DCMAKE_INSTALL_PREFIX=/usr`, then run `sudo cmake --install build`.
 
-## 🚀 Running Zeek Dock
+On KWin, install the application before launching it. KWin grants the required KDE Wayland protocol and restricted D-Bus access through the installed desktop entry; running the executable directly from the build directory does not provide that installed application metadata. The generated entry declares `org_kde_plasma_window_management` and `org.kde.KWin.ScreenShot2`.
 
-Launch Zeek Dock from your application launcher or via terminal:
+## Run and Configure
 
-```bash
-zeek-dock &
+Launch **Zeek Dock** from the application menu, or run the installed executable in a terminal to see its logs:
+
+```sh
+zeek-dock
 ```
 
-> **Note for KDE Plasma / KWin Users:**
-> Zeek Dock utilizes privileged Wayland protocols (`org_kde_plasma_window_management`) and restricted D-Bus interfaces (`org.kde.KWin.ScreenShot2`). Ensure the installed `.desktop` file (`~/.local/share/applications/zeek-dock.desktop` or `/usr/share/applications/zeek-dock.desktop`) is present so KWin grants proper permissions.
+The CMake target installs the `zeek-dock` command. In Settings, open **Task Manager Settings** and enable **Enable window hover preview popups** to turn previews on. The setting is saved in the appearance configuration. Existing users keep their saved value; only fresh configurations use the default, which is off.
 
----
+Right-click the dock to open its settings and configure appearance, position, visibility, panel components, task behavior, and preview options. Configuration is stored under `$XDG_CONFIG_HOME/zeek-dock/` (normally `~/.config/zeek-dock/`), in desktop-specific files such as `KDE/appearance.conf` and `KDE/panel_1.conf`.
 
-## ⚙️ Configuration
+There is no start-at-login toggle in the application. On KDE Plasma, use **System Settings > Autostart** to add the installed Zeek Dock application; remove or disable that entry to stop automatic startup.
 
-* Right-click any empty area of the dock (or an applet) and select **Dock Settings** to configure:
-  * Dock position (Bottom, Top, Left, Right)
-  * Panel style (Icons-Only, Glass 3D, Flat 2D, Metal 2D)
-  * Auto-hide behavior (Always Visible, Auto-Hide, Intelligent Auto-Hide)
-  * Auto-hide fade animation speed
-  * Icon zoom scale and size
-* Config files are stored in `~/.config/zeek-dock/`.
+## Hover Previews
 
----
+Previews are off by default. Enable them in **Task Manager Settings**. On KWin, thumbnail requests use the `org.kde.KWin.ScreenShot2` D-Bus interface and require the installed Zeek Dock desktop entry to declare that restricted interface. The project-generated desktop entry includes this declaration. If capture is unavailable, the preview card still shows its window title and application icon, without a live thumbnail.
 
-## 📄 License
+## Known Issues
 
-Zeek Dock is licensed under the **GNU General Public License v3.0** (GPLv3).
-Based on Crystal Dock with extensive custom enhancements.
+- The thumbnail callback is asynchronous and currently retains a raw pointer to its preview card. Replacing cards while a capture is in flight can leave a callback targeting a deleted card. This is a code-level lifetime risk consistent with the reported crash when moving between icons with previews enabled; it has not been reproduced in this verification run.
+- The visibility-setting save path writes the selected mode to the panel configuration. The earlier report of visibility not saving was not confirmed as a current code defect; runtime persistence still needs manual verification.
+- Live thumbnail capture is KWin-specific. Other compositors have not been tested, and may show only the preview card's title and application icon.
+- The optional Version Checker currently compares against Crystal Dock's upstream release feed; it is not a Zeek Dock update channel.
+
+## Troubleshooting
+
+- If running applications do not appear, launch the installed application entry on KWin and confirm its desktop file includes `X-KDE-Wayland-Interfaces=org_kde_plasma_window_management`. Then run `zeek-dock` in a terminal to inspect startup and runtime messages.
+- To obtain a backtrace, stop the running dock and start the installed executable under GDB: `gdb --args zeek-dock`, then enter `run`. After a crash, enter `bt`.
+- If previews show no thumbnail, confirm that the installed desktop entry declares `X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2` and that the session is running KWin.
+
+## Uninstall
+
+From the configured build directory, run `cmake --build build --target uninstall`. Use the same privileges used for installation; the target removes the files listed in that build's install manifest.
+
+## Contributing
+
+Bug reports and focused patches are welcome. Please include your desktop environment, compositor, build command, relevant terminal output, and reproduction steps. Do not include personal configuration files, logs with private data, or core dumps.
+
+## Credits
+
+Zeek Dock is a modified version of Crystal Dock by Viet Dang (`dangvd`), available at <https://github.com/dangvd/crystal-dock>. Zeek Dock remains licensed under GPL-3.0. Upstream copyright and license notices are retained; see [CREDITS](CREDITS.md) and [LICENSE](LICENSE).
+
+## License
+
+GNU General Public License v3.0. See [LICENSE](LICENSE).

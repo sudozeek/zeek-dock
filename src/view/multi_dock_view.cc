@@ -54,8 +54,7 @@ MultiDockView::MultiDockView(MultiDockModel* model)
 /* static */ bool MultiDockView::checkPlatformSupported(const QApplication& app) {
   if (QGuiApplication::platformName().toLower() != "wayland") {
     QMessageBox::critical(nullptr, "Unsupported Platform",
-                          "Crystal Dock 2.x only supports Wayland.\n"
-                          "For X11, please use Crystal Dock 1.x");
+                          "Zeek Dock only supports Wayland.");
     return false;
   }
 
@@ -143,13 +142,13 @@ void MultiDockView::watchIconTheme() {
       QDir::homePath() + "/.config/kdeglobals";
 
   if (!QFile::exists(kdeglobals)) {
-    std::cerr << "[crystal-dock] kdeglobals not found at " << kdeglobals.toStdString()
+    std::cerr << "[zeek-dock] kdeglobals not found at " << kdeglobals.toStdString()
               << " — live icon theme updates will not work." << std::endl;
     return;
   }
 
   currentIconTheme_ = readKdeIconTheme();
-  std::cout << "[crystal-dock] Watching icon theme: " << currentIconTheme_.toStdString()
+  std::cout << "[zeek-dock] Watching icon theme: " << currentIconTheme_.toStdString()
             << " (file: " << kdeglobals.toStdString() << ")" << std::endl;
 
   kdeGlobalsWatcher_.addPath(kdeglobals);
@@ -175,7 +174,7 @@ void MultiDockView::onKdeGlobalsChanged(const QString& path) {
     return;  // No icon theme change — ignore.
   }
 
-  std::cout << "[crystal-dock] Icon theme changed: "
+  std::cout << "[zeek-dock] Icon theme changed: "
             << currentIconTheme_.toStdString() << " -> " << newTheme.toStdString()
             << " — reloading dock icons." << std::endl;
 

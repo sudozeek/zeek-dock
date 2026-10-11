@@ -1,37 +1,13 @@
-# Window Previews & Capture Analysis on KWin Wayland
+# Window Previews
 
-This document evaluates window capture mechanisms for hover window previews under KWin (Plasma 6.7 Wayland).
+The task manager can show a popup when the pointer rests over a running application icon. Previews are disabled by default and can be enabled in Task Manager Settings.
 
-## 1. Window Capture Options Evaluated
+When a preview card is constructed, it requests a thumbnail from KWin's `org.kde.KWin.ScreenShot2` D-Bus interface. Requests run asynchronously. The card initially displays the application's icon; if capture does not return an image, the title and icon remain visible without a live thumbnail.
 
-### Option (a): KWin Screencast D-Bus Interface (`org.kde.KWin.ScreenCast`) + PipeWire
-- **Mechanism:** KWin provides a D-Bus interface `org.kde.KWin.ScreenCast` with method `streamWindow(QString uuid)`.
-- **How it works:** Calling `streamWindow` with a window's UUID returns a PipeWire node ID, allowing a client to open a PipeWire video stream for that specific window.
-- **Evaluation:**
-  - Pros: Native KWin window capture path without full-screen capture prompts.
-  - Cons: Requires linking `libpipewire-0.3` and SPA headers, initializing PipeWire loops, and converting PipeWire video buffers to `QPixmap`.
-  - Status: Documented for future native thumbnail integration via the modular `ThumbnailProvider` abstraction.
+KWin requires the installed desktop entry to declare restricted D-Bus access with:
 
-### Option (b): Wayland Protocol (`ext-image-copy-capture-v1`)
-- **Mechanism:** Standard Wayland protocol extension for capturing toplevel surfaces.
-- **Evaluation:**
-  - Supported on compositors implementing `ext-foreign-toplevel-image-capture-source-manager-v1` (e.g. Hyprland, Labwc, Niri).
-  - KWin 6.7 does not expose this staging protocol by default for standalone unprivileged clients.
+```ini
+X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2
+```
 
-### Option (c): Text-Only Fallback (Current Baseline)
-- **Mechanism:** When no thumbnail capture backend is active, `WindowPreviewPopup` renders a text-only card showing:
-  - Window title (elided if long)
-  - Click row to activate window
-  - Close button (`✕`) to close window
-- **Evaluation:**
-  - 100% reliable, zero extra CPU/GPU overhead, non-crashing, non-focus-stealing.
-  - Logs a single diagnostic message on startup:
-    `[crystal-dock] Window preview: thumbnail capture unavailable — TextOnlyFallback ... — showing text-only popup.`
-
----
-
-## 2. Resource Consumption & Idle Policy
-
-- **Capture-Only-While-Open:** Capturing or thumbnail rendering occurs strictly while the preview popup is visible.
-- **Idle CPU:** 0.0% when popups are closed.
-- **Focus Stealing:** Popup uses `Qt::ToolTip` flags so keyboard focus remains on the active application.
+The project desktop-entry template includes this declaration. Other compositors and their capture support have not been verified. The preview cards are rebuilt when the hovered application's window list changes; asynchronous callback lifetime during that replacement remains a known risk.

@@ -108,7 +108,7 @@ constexpr bool kDefaultGroupTasksByApplication = true;
 constexpr bool kDefaultClickToMinimize = true;
 constexpr bool kDefaultScrollToCycle = true;
 // Phase 4: window preview popup defaults.
-constexpr bool kDefaultShowWindowPreviews = true;
+constexpr bool kDefaultShowWindowPreviews = false;
 constexpr int kDefaultPreviewDelayMs = 400;
 constexpr int kDefaultPreviewSizePx = 220;  // ~2x2 inches at 96 DPI
 constexpr bool kDefaultPreviewSizeFromDpi = false;

@@ -155,7 +155,7 @@ configure_file(zeek-dock.desktop.cmake
 
 install(TARGETS zeek-dock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/zeek-dock.desktop
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications)
+    DESTINATION share/applications)
 
 # Uninstall
 

@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Crystal Dock
+Name=Zeek Dock
 GenericName=Desktop Panel
 Icon=user-desktop
-Exec=@CMAKE_INSTALL_PREFIX@/bin/crystal-dock
+Exec=zeek-dock
 Terminal=false
 Categories=Utility;
 Keywords=Dock;Launcher;Taskbar;Desktop;Panel;
