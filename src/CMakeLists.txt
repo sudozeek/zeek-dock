@@ -72,6 +72,7 @@ set(SRCS
     view/wallpaper_settings_dialog.cc
     view/wifi_connection_dialog.cc
     view/wifi_manager.cc
+    view/window_preview_popup.cc
     utils/desktop_file.cc
     desktop/desktop_env.h
     desktop/budgie_desktop_env.h
@@ -123,6 +124,7 @@ set(SRCS
     view/wallpaper_settings_dialog.h
     view/wifi_connection_dialog.h
     view/wifi_manager.h
+    view/window_preview_popup.h
     utils/command_utils.h
     utils/desktop_file.h
     utils/draw_utils.h

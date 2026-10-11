@@ -29,6 +29,7 @@
 #include "display/window_system.h"
 
 #include "icon_based_dock_item.h"
+#include "window_preview_popup.h"
 
 namespace crystaldock {
 
@@ -112,6 +113,12 @@ class Program : public QObject, public IconBasedDockItem {
 
   void closeAllWindows();
 
+  // Phase 4: Hover preview popup methods.
+  void onHoverEnter();
+  void onHoverLeave();
+  void showPreviewPopup();
+  void hidePreviewPopup();
+
  private:
   static constexpr int kLaunchingAcknowledgementDurationMs = 3000;  // 3 seconds.
 
@@ -155,6 +162,12 @@ class Program : public QObject, public IconBasedDockItem {
   bool bouncing_ = false;
   float bounceProgress_ = 0.0f;
   bool bouncingUp_ = true;
+
+  // Phase 4: Window preview popup timer and widget.
+  QTimer previewTimer_;
+  QTimer previewGraceTimer_;
+  std::unique_ptr<WindowPreviewPopup> previewPopup_;
+  TextOnlyFallbackProvider fallbackProvider_;
 
   void startBounceAnimation();
   void updateBounceAnimation();

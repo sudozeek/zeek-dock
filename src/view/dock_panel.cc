@@ -901,6 +901,13 @@ void DockPanel::enterEvent (QEnterEvent* e) {
 }
 
 void DockPanel::leaveEvent(QEvent* e) {
+  if (activeItem_ >= 0 && activeItem_ < itemCount()) {
+    auto* prog = dynamic_cast<Program*>(items_[activeItem_].get());
+    if (prog) {
+      prog->onHoverLeave();
+    }
+  }
+
   if (isMinimized_ || isShowingPopup_) {
     return;
   }
@@ -1929,7 +1936,22 @@ void DockPanel::updateActiveItem(int x, int y) {
       (orientation_ == Qt::Vertical && items_[i]->top_ < y))) {
     ++i;
   }
-  activeItem_ = i - 1;
+  int newActiveItem = i - 1;
+  if (newActiveItem != activeItem_) {
+    if (activeItem_ >= 0 && activeItem_ < itemCount()) {
+      auto* oldProg = dynamic_cast<Program*>(items_[activeItem_].get());
+      if (oldProg) {
+        oldProg->onHoverLeave();
+      }
+    }
+    activeItem_ = newActiveItem;
+    if (activeItem_ >= 0 && activeItem_ < itemCount()) {
+      auto* newProg = dynamic_cast<Program*>(items_[activeItem_].get());
+      if (newProg) {
+        newProg->onHoverEnter();
+      }
+    }
+  }
 }
 
 int DockPanel::parabolic(int x) {

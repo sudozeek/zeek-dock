@@ -18,9 +18,16 @@
 
 #include "multi_dock_view.h"
 
+#include <iostream>
+
 #include <QCoreApplication>
+#include <QDir>
+#include <QFile>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QMessageBox>
+#include <QPixmapCache>
+#include <QSettings>
 
 #include "display/window_system.h"
 
@@ -37,6 +44,11 @@ MultiDockView::MultiDockView(MultiDockModel* model)
   connect(WindowSystem::self(), SIGNAL(currentDesktopChanged(std::string_view)),
           this, SLOT(setWallpaper()));
   loadData();
+
+  // Phase 1: Start watching for icon theme changes in KDE's global config file.
+  // KDE writes the new icon theme name to [Icons] Theme= in kdeglobals
+  // when the user changes the icon theme in System Settings.
+  watchIconTheme();
 }
 
 /* static */ bool MultiDockView::checkPlatformSupported(const QApplication& app) {
@@ -107,6 +119,80 @@ bool MultiDockView::setWallpaper(int screen) {
   }
 
   return desktopEnv_->setWallpaper(screen, wallpaper);
+}
+
+// Phase 1: Read the current icon theme name from KDE global settings.
+// QSettings parses the INI-format kdeglobals file; the icon theme is stored
+// under [Icons] group with key "Theme".
+/* static */ QString MultiDockView::readKdeIconTheme() {
+  const QString kdeglobals =
+      QDir::homePath() + "/.config/kdeglobals";
+  QSettings settings(kdeglobals, QSettings::IniFormat);
+  settings.beginGroup("Icons");
+  const QString theme = settings.value("Theme", QString()).toString();
+  settings.endGroup();
+  return theme;
+}
+
+// Phase 1: Set up file system watcher for ~/.config/kdeglobals.
+// The watcher detects any write to kdeglobals (KDE updates the whole file
+// when settings change). On each change we compare the stored theme name;
+// if it differs we apply the new theme to Qt and reload all dock icons.
+void MultiDockView::watchIconTheme() {
+  const QString kdeglobals =
+      QDir::homePath() + "/.config/kdeglobals";
+
+  if (!QFile::exists(kdeglobals)) {
+    std::cerr << "[crystal-dock] kdeglobals not found at " << kdeglobals.toStdString()
+              << " — live icon theme updates will not work." << std::endl;
+    return;
+  }
+
+  currentIconTheme_ = readKdeIconTheme();
+  std::cout << "[crystal-dock] Watching icon theme: " << currentIconTheme_.toStdString()
+            << " (file: " << kdeglobals.toStdString() << ")" << std::endl;
+
+  kdeGlobalsWatcher_.addPath(kdeglobals);
+
+  // QFileSystemWatcher on Linux emits fileChanged when the file is modified.
+  // Note: some editors replace the file atomically (delete + recreate), so
+  // we also re-add the path in the slot to keep watching after such replacements.
+  connect(&kdeGlobalsWatcher_, &QFileSystemWatcher::fileChanged,
+          this, &MultiDockView::onKdeGlobalsChanged);
+}
+
+// Phase 1: Slot called when kdeglobals is written.
+// Re-adds the watch path (in case the file was atomically replaced),
+// then checks if the icon theme has changed and reloads all dock items.
+void MultiDockView::onKdeGlobalsChanged(const QString& path) {
+  // Re-add path in case it was removed due to atomic replace (inotify IN_DELETE).
+  if (!kdeGlobalsWatcher_.files().contains(path)) {
+    kdeGlobalsWatcher_.addPath(path);
+  }
+
+  const QString newTheme = readKdeIconTheme();
+  if (newTheme.isEmpty() || newTheme == currentIconTheme_) {
+    return;  // No icon theme change — ignore.
+  }
+
+  std::cout << "[crystal-dock] Icon theme changed: "
+            << currentIconTheme_.toStdString() << " -> " << newTheme.toStdString()
+            << " — reloading dock icons." << std::endl;
+
+  currentIconTheme_ = newTheme;
+
+  // Tell Qt about the new theme so QIcon::fromTheme picks it up immediately.
+  QIcon::setThemeName(newTheme);
+
+  // Clear Qt's pixmap cache so stale icon pixmaps are evicted and fresh ones
+  // are fetched from the new theme on the next paint.
+  QPixmapCache::clear();
+
+  // Reload every dock panel — this clears items and re-creates them,
+  // causing all icons to be re-resolved from the new theme.
+  for (const auto& dock : docks_) {
+    dock.second->reload();
+  }
 }
 
 void MultiDockView::loadData() {

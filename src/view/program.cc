@@ -79,6 +79,17 @@ void Program::init() {
           [this]() {
             parent_->setShowingPopup(false);
           });
+
+  // Phase 4: Configure preview timers.
+  previewTimer_.setSingleShot(true);
+  connect(&previewTimer_, &QTimer::timeout, this, &Program::showPreviewPopup);
+  previewGraceTimer_.setSingleShot(true);
+  previewGraceTimer_.setInterval(150);  // 150ms grace period between icon and popup
+  connect(&previewGraceTimer_, &QTimer::timeout, this, [this]() {
+    if (previewPopup_ && !previewPopup_->isHovered()) {
+      hidePreviewPopup();
+    }
+  });
 }
 
 void Program::draw(QPainter *painter) const {
@@ -183,7 +194,15 @@ void Program::mousePressEvent(QMouseEvent* e) {
           launch();
           startBounceAnimation();
         } else {
-          cycleThroughTasks(!(mod & Qt::ControlModifier));
+          // Phase 3: When click-to-minimize is on, left-clicking an already-active
+          // single-window app minimizes it. Ctrl overrides to always cycle forward.
+          const bool activeNow = (getActiveTask() >= 0);
+          if (activeNow && tasks_.size() == 1 && model_->clickToMinimize()
+              && !(mod & Qt::ControlModifier)) {
+            WindowSystem::minimizeWindow(tasks_[0].window);
+          } else {
+            cycleThroughTasks(!(mod & Qt::ControlModifier));
+          }
         }
       }
     }
@@ -196,6 +215,10 @@ void Program::mousePressEvent(QMouseEvent* e) {
 }
 
 void Program::wheelEvent(QWheelEvent* e) {
+  // Phase 3: scroll-to-cycle is configurable; skip if disabled.
+  if (!model_->scrollToCycle()) {
+    return;
+  }
   const int delta = e->angleDelta().y();
   if (delta == 0) {
     return;
@@ -493,6 +516,63 @@ float Program::getBounceOffset() const {
   }
 
   return bounceOffset;
+}
+
+// Phase 4: Hover preview popup methods implementation.
+void Program::onHoverEnter() {
+  if (!model_->showWindowPreviews() || tasks_.empty()) {
+    return;
+  }
+  previewGraceTimer_.stop();
+  previewTimer_.start(model_->previewDelayMs());
+}
+
+void Program::onHoverLeave() {
+  previewTimer_.stop();
+  if (previewPopup_) {
+    previewGraceTimer_.start();
+  }
+}
+
+void Program::showPreviewPopup() {
+  if (!model_->showWindowPreviews() || tasks_.empty()) {
+    return;
+  }
+
+  std::vector<WindowPreviewEntry> entries;
+  entries.reserve(tasks_.size());
+  for (const auto& task : tasks_) {
+    entries.push_back({task.window, task.name});
+  }
+
+  if (!previewPopup_) {
+    previewPopup_ = std::make_unique<WindowPreviewPopup>(
+        model_, &fallbackProvider_, orientation_);
+    connect(previewPopup_.get(), &WindowPreviewPopup::popupClosed,
+            this, &Program::hidePreviewPopup);
+  }
+
+  previewPopup_->setWindows(entries);
+
+  // Calculate icon geometry in global coordinates.
+  const int iconX = left_;
+  const int iconY = top_;
+  const int iconW = getWidth();
+  const int iconH = getHeight();
+  const QPoint globalPos = parent_->mapToGlobal(QPoint(iconX, iconY));
+  const QRect iconGlobalRect(globalPos.x(), globalPos.y(), iconW, iconH);
+
+  previewPopup_->positionNear(iconGlobalRect);
+  previewPopup_->show();
+}
+
+void Program::hidePreviewPopup() {
+  previewTimer_.stop();
+  previewGraceTimer_.stop();
+  if (previewPopup_) {
+    previewPopup_->hide();
+    previewPopup_.reset();
+  }
 }
 
 }  // namespace crystaldock

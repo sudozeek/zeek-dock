@@ -35,11 +35,7 @@ TaskManagerSettingsDialog::TaskManagerSettingsDialog(QWidget* parent, MultiDockM
   // Adjust the UI for single/multi-screen.
   isSingleScreen_ = (WindowSystem::screens().size() == 1);
   ui->showCurrentScreenOnly->setVisible(!isSingleScreen_);
-  if (isSingleScreen_) {
-    ui->groupTasksByApplication->move(40, 130);
-    ui->buttonBox->move(40, 200);
-    resize(600, 270);
-  }
+
   connect(ui->buttonBox, SIGNAL(clicked(QAbstractButton*)),
       this, SLOT(buttonClicked(QAbstractButton*)));
 
@@ -59,6 +55,8 @@ void TaskManagerSettingsDialog::buttonClicked(QAbstractButton* button) {
   auto role = ui->buttonBox->buttonRole(button);
   if (role == QDialogButtonBox::ApplyRole) {
     saveData();
+  } else if (role == QDialogButtonBox::ResetRole) {
+    resetData();
   }
 }
 
@@ -68,6 +66,31 @@ void TaskManagerSettingsDialog::loadData() {
     ui->showCurrentScreenOnly->setChecked(model_->currentScreenTasksOnly());
   }
   ui->groupTasksByApplication->setChecked(model_->groupTasksByApplication());
+  ui->clickToMinimize->setChecked(model_->clickToMinimize());
+  ui->scrollToCycle->setChecked(model_->scrollToCycle());
+
+  // Window preview settings.
+  ui->showWindowPreviews->setChecked(model_->showWindowPreviews());
+  ui->previewDelayMs->setValue(model_->previewDelayMs());
+  ui->previewSizePx->setValue(model_->previewSizePx());
+  ui->previewShowCloseButton->setChecked(model_->previewShowCloseButton());
+  ui->previewSizeFromDpi->setChecked(model_->previewSizeFromDpi());
+}
+
+void TaskManagerSettingsDialog::resetData() {
+  ui->showCurrentDesktopOnly->setChecked(kDefaultCurrentDesktopTasksOnly);
+  if (!isSingleScreen_) {
+    ui->showCurrentScreenOnly->setChecked(kDefaultCurrentScreenTasksOnly);
+  }
+  ui->groupTasksByApplication->setChecked(kDefaultGroupTasksByApplication);
+  ui->clickToMinimize->setChecked(kDefaultClickToMinimize);
+  ui->scrollToCycle->setChecked(kDefaultScrollToCycle);
+
+  ui->showWindowPreviews->setChecked(kDefaultShowWindowPreviews);
+  ui->previewDelayMs->setValue(kDefaultPreviewDelayMs);
+  ui->previewSizePx->setValue(kDefaultPreviewSizePx);
+  ui->previewShowCloseButton->setChecked(kDefaultPreviewShowCloseButton);
+  ui->previewSizeFromDpi->setChecked(kDefaultPreviewSizeFromDpi);
 }
 
 void TaskManagerSettingsDialog::saveData() {
@@ -76,6 +99,16 @@ void TaskManagerSettingsDialog::saveData() {
     model_->setCurrentScreenTasksOnly(ui->showCurrentScreenOnly->isChecked());
   }
   model_->setGroupTasksByApplication(ui->groupTasksByApplication->isChecked());
+  model_->setClickToMinimize(ui->clickToMinimize->isChecked());
+  model_->setScrollToCycle(ui->scrollToCycle->isChecked());
+
+  // Window preview settings.
+  model_->setShowWindowPreviews(ui->showWindowPreviews->isChecked());
+  model_->setPreviewDelayMs(ui->previewDelayMs->value());
+  model_->setPreviewSizePx(ui->previewSizePx->value());
+  model_->setPreviewShowCloseButton(ui->previewShowCloseButton->isChecked());
+  model_->setPreviewSizeFromDpi(ui->previewSizeFromDpi->isChecked());
+
   model_->saveAppearanceConfig();
 }
 

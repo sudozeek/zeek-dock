@@ -77,18 +77,22 @@ constexpr float kSmallClockFontScaleFactor = 0.6;
 
 constexpr PanelVisibility kDefaultVisibility = PanelVisibility::AlwaysVisible;
 constexpr bool kDefaultAutoHide = false;
-constexpr bool kDefaultShowApplicationMenu = true;
+// Phase 1: icons-only transparent dock by default — all extras off.
+// Components remain available via the right-click "Add Panel Components" menu.
+constexpr bool kDefaultShowApplicationMenu = false;
 constexpr bool kDefaultShowPager = false;
 constexpr bool kDefaultShowTaskManager = true;
-constexpr bool kDefaultShowTrash = true;
-constexpr bool kDefaultShowWifiManager = true;
-constexpr bool kDefaultShowVolumeControl = true;
+constexpr bool kDefaultShowTrash = false;
+constexpr bool kDefaultShowWifiManager = false;
+constexpr bool kDefaultShowVolumeControl = false;
 constexpr bool kDefaultShowBatteryIndicator = false;
-constexpr bool kDefaultShowKeyboardLayout = true;
-constexpr bool kDefaultShowVersionChecker = true;
-constexpr bool kDefaultShowClock = true;
+constexpr bool kDefaultShowKeyboardLayout = false;
+constexpr bool kDefaultShowVersionChecker = false;
+constexpr bool kDefaultShowClock = false;
 constexpr int kDefaultVolumeScrollStep = 2;
-constexpr PanelStyle kDefaultPanelStyle = PanelStyle::Glass3D_Floating;
+// Phase 1: transparent Flat2D floating style by default.
+// Flat2D with 0% background alpha renders only the icons — no panel plate, border, or shadow.
+constexpr PanelStyle kDefaultPanelStyle = PanelStyle::Flat2D_Floating;
 
 constexpr char kDefaultApplicationMenuName[] = "Applications";
 constexpr int kDefaultApplicationMenuIconSize = 40;
@@ -98,8 +102,21 @@ constexpr bool kDefaultShowDesktopNumber = true;
 constexpr bool kDefaultCurrentDesktopTasksOnly = false;
 constexpr bool kDefaultCurrentScreenTasksOnly = true;
 constexpr bool kDefaultGroupTasksByApplication = true;
+// Phase 3: taskbar behavior toggles.
+constexpr bool kDefaultClickToMinimize = true;
+constexpr bool kDefaultScrollToCycle = true;
+// Phase 4: window preview popup defaults.
+constexpr bool kDefaultShowWindowPreviews = true;
+constexpr int kDefaultPreviewDelayMs = 400;
+constexpr int kDefaultPreviewSizePx = 220;  // ~2x2 inches at 96 DPI
+constexpr bool kDefaultPreviewSizeFromDpi = false;
+constexpr bool kDefaultPreviewShowCloseButton = true;
+// refresh interval in ms: 0 = once on open, >0 = periodic.
+constexpr int kDefaultPreviewRefreshIntervalMs = 0;
+
 constexpr bool kDefaultUse24HourClock = true;
 constexpr float kDefaultClockFontScaleFactor = kLargeClockFontScaleFactor;
+
 
 constexpr char kSeparatorId[] = "separator";
 constexpr char kLauncherSeparatorId[] = "launcher-separator";
@@ -469,6 +486,83 @@ class MultiDockModel : public QObject {
     setAppearanceProperty(kTaskManagerCategory, kGroupTasksByApplication, value);
   }
 
+  // Phase 3: click-to-minimize toggle.
+  // When true, clicking an active app's icon minimizes it instead of just raising.
+  bool clickToMinimize() const {
+    return appearanceProperty(kTaskManagerCategory, kClickToMinimize,
+                              kDefaultClickToMinimize);
+  }
+
+  void setClickToMinimize(bool value) {
+    setAppearanceProperty(kTaskManagerCategory, kClickToMinimize, value);
+  }
+
+  // Phase 3: scroll-to-cycle toggle.
+  // When true, scroll wheel over a task icon cycles through that app's windows.
+  bool scrollToCycle() const {
+    return appearanceProperty(kTaskManagerCategory, kScrollToCycle,
+                              kDefaultScrollToCycle);
+  }
+
+  void setScrollToCycle(bool value) {
+    setAppearanceProperty(kTaskManagerCategory, kScrollToCycle, value);
+  }
+
+  // Phase 4: window preview popup settings.
+  bool showWindowPreviews() const {
+    return appearanceProperty(kTaskManagerCategory, kShowWindowPreviews,
+                              kDefaultShowWindowPreviews);
+  }
+
+  void setShowWindowPreviews(bool value) {
+    setAppearanceProperty(kTaskManagerCategory, kShowWindowPreviews, value);
+  }
+
+  int previewDelayMs() const {
+    return appearanceProperty(kTaskManagerCategory, kPreviewDelayMs,
+                              kDefaultPreviewDelayMs);
+  }
+
+  void setPreviewDelayMs(int value) {
+    setAppearanceProperty(kTaskManagerCategory, kPreviewDelayMs, value);
+  }
+
+  int previewSizePx() const {
+    return appearanceProperty(kTaskManagerCategory, kPreviewSizePx,
+                              kDefaultPreviewSizePx);
+  }
+
+  void setPreviewSizePx(int value) {
+    setAppearanceProperty(kTaskManagerCategory, kPreviewSizePx, value);
+  }
+
+  bool previewSizeFromDpi() const {
+    return appearanceProperty(kTaskManagerCategory, kPreviewSizeFromDpi,
+                              kDefaultPreviewSizeFromDpi);
+  }
+
+  void setPreviewSizeFromDpi(bool value) {
+    setAppearanceProperty(kTaskManagerCategory, kPreviewSizeFromDpi, value);
+  }
+
+  bool previewShowCloseButton() const {
+    return appearanceProperty(kTaskManagerCategory, kPreviewShowCloseButton,
+                              kDefaultPreviewShowCloseButton);
+  }
+
+  void setPreviewShowCloseButton(bool value) {
+    setAppearanceProperty(kTaskManagerCategory, kPreviewShowCloseButton, value);
+  }
+
+  int previewRefreshIntervalMs() const {
+    return appearanceProperty(kTaskManagerCategory, kPreviewRefreshIntervalMs,
+                              kDefaultPreviewRefreshIntervalMs);
+  }
+
+  void setPreviewRefreshIntervalMs(int value) {
+    setAppearanceProperty(kTaskManagerCategory, kPreviewRefreshIntervalMs, value);
+  }
+
   bool use24HourClock() const {
     return appearanceProperty(kClockCategory, kUse24HourClock,
                               kDefaultUse24HourClock);
@@ -796,6 +890,16 @@ class MultiDockModel : public QObject {
   static constexpr char kCurrentDesktopTasksOnly[] = "currentDesktopTasksOnly";
   static constexpr char kCurrentScreenTasksOnly[] = "currentScreenTasksOnly";
   static constexpr char kGroupTasksByApplication[] = "groupTasksByApplication";
+  // Phase 3: taskbar behavior keys.
+  static constexpr char kClickToMinimize[] = "clickToMinimize";
+  static constexpr char kScrollToCycle[] = "scrollToCycle";
+  // Phase 4: window preview keys.
+  static constexpr char kShowWindowPreviews[] = "showWindowPreviews";
+  static constexpr char kPreviewDelayMs[] = "previewDelayMs";
+  static constexpr char kPreviewSizePx[] = "previewSizePx";
+  static constexpr char kPreviewSizeFromDpi[] = "previewSizeFromDpi";
+  static constexpr char kPreviewShowCloseButton[] = "previewShowCloseButton";
+  static constexpr char kPreviewRefreshIntervalMs[] = "previewRefreshIntervalMs";
 
   static constexpr char kVolumeControlCategory[] = "VolumeControl";
   static constexpr char kVolumeScrollStep[] = "volumeScrollStep";

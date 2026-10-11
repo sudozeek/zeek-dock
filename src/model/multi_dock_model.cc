@@ -92,6 +92,11 @@ void MultiDockModel::addDock(PanelPosition position, int screen,
     QColor color(kDefaultBackgroundColor);
     color.setAlphaF(kDefaultBackgroundAlpha);
     setBackgroundColor(color);
+    // Phase 1: Flat2D is the default style; set its background to fully transparent
+    // so only the icons are drawn — no panel plate, border, or shadow.
+    QColor color2D(kDefaultBackgroundColor2D);
+    color2D.setAlphaF(0.0f);
+    setBackgroundColor2D(color2D);
     setBorderColor(QColor(kDefaultBorderColor));
     setTooltipFontSize(kDefaultTooltipFontSize);
 

@@ -23,7 +23,9 @@
 #include <unordered_map>
 
 #include <QApplication>
+#include <QFileSystemWatcher>
 #include <QObject>
+#include <QString>
 
 #include "dock_panel.h"
 #include <desktop/desktop_env.h>
@@ -52,8 +54,19 @@ class MultiDockView : public QObject {
   bool setWallpaper();
   bool setWallpaper(int screen);
 
+  // Phase 1: Called when the KDE icon theme config file changes.
+  // Checks whether the icon theme name actually changed and reloads all docks
+  // if so, so the dock updates live when System Settings > Icons is changed.
+  void onKdeGlobalsChanged(const QString& path);
+
  private:
   void loadData();
+
+  // Reads the current icon theme name from ~/.config/kdeglobals.
+  static QString readKdeIconTheme();
+
+  // Starts watching ~/.config/kdeglobals for icon theme changes.
+  void watchIconTheme();
 
   // Creates a default dock if none exists.
   void createDefaultDock();
@@ -61,6 +74,10 @@ class MultiDockView : public QObject {
   MultiDockModel* model_;  // No ownership.
   std::unordered_map<int, std::unique_ptr<DockPanel>> docks_;
   DesktopEnv* desktopEnv_;
+
+  // Phase 1: file watcher for ~/.config/kdeglobals to detect live icon theme changes.
+  QFileSystemWatcher kdeGlobalsWatcher_;
+  QString currentIconTheme_;
 };
 
 }  // namespace crystaldock

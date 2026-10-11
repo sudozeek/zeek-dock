@@ -45,6 +45,7 @@ class TaskManagerSettingsDialog : public QDialog {
 
  private:
   void loadData();
+  void resetData();
   void saveData();
 
   Ui::TaskManagerSettingsDialog *ui;
