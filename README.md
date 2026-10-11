@@ -2,9 +2,33 @@
 
 An icon-only Linux dock that combines pinned launchers with a taskbar for running windows.
 
-![Zeek Dock running on KDE Plasma](images/zeek%20dock.png)
+## Screenshots
 
-> GIF placeholder: add a short interaction recording before release.
+### Icons Only (No Background)
+
+The default borderless, background-free dock style.
+
+![Zeek Dock using Icons Only with no background](images/zeek%20dock%20img%202.png)
+
+### Right-Click Menu
+
+Right-click the dock to open its menu. From here, open **Dock Settings**, **Task Manager Settings**, or use the **Appearance** and **Panel** submenus.
+
+![Zeek Dock right-click menu with settings and appearance options](images/zeek%20dock%20img%203.png)
+
+### Glass 3D
+
+Choose **Appearance > Style: Glass 3D** for the translucent three-dimensional panel.
+
+![Zeek Dock Glass 3D panel style](images/zeek%20dock%20img%204.png)
+
+### Glass 2D
+
+Choose **Appearance > Style: Glass 2D** for the translucent two-dimensional panel.
+
+![Zeek Dock Glass 2D panel style](images/zeek%20dock%20img%205.png)
+
+> GIF placeholder: an interaction recording can be added later.
 
 ## Features
 
@@ -66,7 +90,7 @@ zeek-dock
 
 The CMake target installs the `zeek-dock` command. In Settings, open **Task Manager Settings** and enable **Enable window hover preview popups** to turn previews on. The setting is saved in the appearance configuration. Existing users keep their saved value; only fresh configurations use the default, which is off.
 
-Right-click the dock to open its settings and configure appearance, position, visibility, panel components, task behavior, and preview options. Configuration is stored under `$XDG_CONFIG_HOME/zeek-dock/` (normally `~/.config/zeek-dock/`), in desktop-specific files such as `KDE/appearance.conf` and `KDE/panel_1.conf`.
+Right-click the dock to open its menu. **Dock Settings** opens the appearance settings dialog for panel appearance, sizing, and zoom. For quick style changes, choose **Appearance > Style: Icons Only (No Background)**, **Style: Glass 3D**, or **Style: Glass 2D**. Use **Panel > Position** to place the dock, **Panel > Visibility** to choose Always Visible, Intelligent Auto Hide, Auto Hide, or Always On Top, and **Panel > Optional Features** to show or hide applets. Open **Task Manager Settings** for running-window behavior and hover-preview options. Configuration is stored under `$XDG_CONFIG_HOME/zeek-dock/` (normally `~/.config/zeek-dock/`), in desktop-specific files such as `KDE/appearance.conf` and `KDE/panel_1.conf`.
 
 There is no start-at-login toggle in the application. On KDE Plasma, use **System Settings > Autostart** to add the installed Zeek Dock application; remove or disable that entry to stop automatic startup.
 
