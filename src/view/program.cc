@@ -27,6 +27,7 @@
 #include <QProcessEnvironment>
 #include <QSettings>
 #include <QTimer>
+#include <QWindow>
 
 #include "display/window_system.h"
 
@@ -84,7 +85,7 @@ void Program::init() {
   previewTimer_.setSingleShot(true);
   connect(&previewTimer_, &QTimer::timeout, this, &Program::showPreviewPopup);
   previewGraceTimer_.setSingleShot(true);
-  previewGraceTimer_.setInterval(150);  // 150ms grace period between icon and popup
+  previewGraceTimer_.setInterval(350);  // 350ms grace period between icon and popup
   connect(&previewGraceTimer_, &QTimer::timeout, this, [this]() {
     if (previewPopup_ && !previewPopup_->isHovered()) {
       hidePreviewPopup();
@@ -98,7 +99,7 @@ void Program::draw(QPainter *painter) const {
   auto taskCount = static_cast<int>(tasks_.size());
   // For launching feedback if bouncing launcher icon is not enabled.
   if (taskCount == 0 && launching_&& !model_->bouncingLauncherIcon()) { taskCount = 1; }
-  if (parent_->showTaskManager() && taskCount > 0) {  // Show task count indicator.
+  if (taskCount > 0) {  // Show task count indicator.
     static constexpr int kMaxVisibleTaskCount = 4;
     if (taskCount > kMaxVisibleTaskCount) { taskCount = kMaxVisibleTaskCount; }
     auto activeTask = getActiveTask();
@@ -107,7 +108,7 @@ void Program::draw(QPainter *painter) const {
     // Size (width if horizontal, or height if vertical) of the indicator.
     const int size = parent_->isGlass()
         ? DockPanel::kIndicatorSizeGlass
-        : parent_->isFlat2D()
+        : (parent_->isFlat2D() || parent_->isIconsOnly())
             ? DockPanel::kIndicatorSizeFlat2D
             : DockPanel::kIndicatorSizeMetal2D;
     const auto spacing = DockPanel::kIndicatorSpacing;
@@ -125,7 +126,7 @@ void Program::draw(QPainter *painter) const {
         drawIndicator(orientation_, x, parent_->taskIndicatorPos(),
                       parent_->taskIndicatorPos(), y,
                       size, DockPanel::k3DPanelThickness, baseColor, painter);
-      } else if (parent_->isFlat2D()) {
+      } else if (parent_->isFlat2D() || parent_->isIconsOnly()) {
         const auto baseColor = useActiveColor
             ? model_->activeIndicatorColor2D() : model_->inactiveIndicatorColor2D();
         drawIndicatorFlat2D(orientation_, x, parent_->taskIndicatorPos(),
@@ -267,8 +268,39 @@ bool Program::addTask(const WindowInfo* task) {
   }
 
   auto* app = model_->findApplication(task->appId);
-  if ((app && app->appId == appId_) || task->appId == appId_.toStdString()) {
+  const QString taskAppId = QString::fromStdString(task->appId);
+  bool matches = false;
+  if ((app && app->appId.compare(appId_, Qt::CaseInsensitive) == 0) ||
+      taskAppId.compare(appId_, Qt::CaseInsensitive) == 0) {
+    matches = true;
+  } else if (!appId_.isEmpty() && !taskAppId.isEmpty()) {
+    auto clean1 = appId_.endsWith(".desktop", Qt::CaseInsensitive)
+        ? appId_.left(appId_.length() - 8) : appId_;
+    auto clean2 = taskAppId.endsWith(".desktop", Qt::CaseInsensitive)
+        ? taskAppId.left(taskAppId.length() - 8) : taskAppId;
+    if (clean1.compare(clean2, Qt::CaseInsensitive) == 0 ||
+        (clean1.contains('.') && clean1.mid(clean1.lastIndexOf('.') + 1).compare(clean2, Qt::CaseInsensitive) == 0) ||
+        (clean2.contains('.') && clean2.mid(clean2.lastIndexOf('.') + 1).compare(clean1, Qt::CaseInsensitive) == 0)) {
+      matches = true;
+    }
+  }
+
+  if (!matches && !command_.isEmpty() && !taskAppId.isEmpty()) {
+    QString cmdBinary = command_.split(' ').first();
+    if (cmdBinary.contains('/')) {
+      cmdBinary = cmdBinary.mid(cmdBinary.lastIndexOf('/') + 1);
+    }
+    auto clean2 = taskAppId.endsWith(".desktop", Qt::CaseInsensitive)
+        ? taskAppId.left(taskAppId.length() - 8) : taskAppId;
+    if (cmdBinary.compare(clean2, Qt::CaseInsensitive) == 0 ||
+        (clean2.contains('.') && clean2.mid(clean2.lastIndexOf('.') + 1).compare(cmdBinary, Qt::CaseInsensitive) == 0)) {
+      matches = true;
+    }
+  }
+
+  if (matches) {
     tasks_.push_back(ProgramTask(task->window, QString::fromStdString(task->title),
+                                 QString::fromStdString(task->uuid),
                                  task->demandsAttention));
     if (task->demandsAttention) {
       setDemandsAttention(true);
@@ -542,17 +574,32 @@ void Program::showPreviewPopup() {
   std::vector<WindowPreviewEntry> entries;
   entries.reserve(tasks_.size());
   for (const auto& task : tasks_) {
-    entries.push_back({task.window, task.name});
+    entries.push_back({task.window, task.name, task.uuid, getIcon(48)});
   }
 
   if (!previewPopup_) {
     previewPopup_ = std::make_unique<WindowPreviewPopup>(
-        model_, &fallbackProvider_, orientation_);
+        model_, KwinScreenshotProvider::instance(), orientation_);
     connect(previewPopup_.get(), &WindowPreviewPopup::popupClosed,
             this, &Program::hidePreviewPopup);
+
+    // Wayland requires popup/tooltip windows to have a transientParent set on
+    // their underlying QWindow before show() is called, otherwise KWin rejects
+    // them with "Failed to create popup". Force native window creation via
+    // winId() before calling windowHandle(), then wire up the transient parent.
+    previewPopup_->winId();  // Force QWindow creation.
+    if (auto* popupWin = previewPopup_->windowHandle()) {
+      if (auto* dockWin = parent_->windowHandle()) {
+        popupWin->setTransientParent(dockWin);
+      }
+    }
   }
 
   previewPopup_->setWindows(entries);
+
+  // Prevent auto-hide and intellihide from hiding the dock while preview is shown.
+  parent_->setShowingPopup(true);
+  parent_->setAutoHide(false);
 
   // Calculate icon geometry in global coordinates.
   const int iconX = left_;
@@ -562,7 +609,8 @@ void Program::showPreviewPopup() {
   const QPoint globalPos = parent_->mapToGlobal(QPoint(iconX, iconY));
   const QRect iconGlobalRect(globalPos.x(), globalPos.y(), iconW, iconH);
 
-  previewPopup_->positionNear(iconGlobalRect);
+  // Uplift preview above the dock panel so it never overlaps or touches the dock.
+  previewPopup_->positionNear(iconGlobalRect, parent_);
   previewPopup_->show();
 }
 
@@ -571,8 +619,9 @@ void Program::hidePreviewPopup() {
   previewGraceTimer_.stop();
   if (previewPopup_) {
     previewPopup_->hide();
-    previewPopup_.reset();
   }
+  // Allow dock to resume normal auto-hide behavior once preview is closed.
+  parent_->setShowingPopup(false);
 }
 
 }  // namespace crystaldock

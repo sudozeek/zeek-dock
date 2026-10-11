@@ -114,6 +114,7 @@ std::unique_ptr<QDBusInterface> WindowSystem::activityManager_;
     QWidget* widget, LayerShellQt::Window::Anchors anchors, uint32_t strutSize) {
   auto* layerShellWin = getLayerShellWin(widget);
   if (layerShellWin) {
+    layerShellWin->setScope("dock");
     layerShellWin->setAnchors(anchors);
     layerShellWin->setExclusiveZone(strutSize);
     layerShellWin->setScreenConfiguration(LayerShellQt::Window::ScreenFromQWindow);
@@ -123,6 +124,7 @@ std::unique_ptr<QDBusInterface> WindowSystem::activityManager_;
 /*static*/ void WindowSystem::setLayer(QWidget* widget, LayerShellQt::Window::Layer layer) {
   auto* layerShellWin = getLayerShellWin(widget);
   if (layerShellWin) {
+    layerShellWin->setScope("dock");
     layerShellWin->setLayer(layer);
   }
 }

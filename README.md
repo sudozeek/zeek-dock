@@ -1,90 +1,127 @@
-![Crystal Dock](https://github.com/dangvd/crystal-dock/raw/main/images/crystal-dock.jpg)
+# 🚀 Zeek Dock
 
-# Crystal Dock
+**Zeek Dock** is a modern, ultra-smooth desktop dock and taskbar designed for Linux desktops on Wayland (optimized for KDE Plasma 6, Hyprland, Sway, and other modern Wayland compositors).
 
-[Releases](https://github.com/dangvd/crystal-dock/releases)
-[Documentation](https://github.com/dangvd/crystal-dock/wiki/Documentation)
-[FAQ & Troubleshooting](https://github.com/dangvd/crystal-dock/wiki/FAQ-&-Troubleshooting)
-[Author & Contributors](https://github.com/dangvd/crystal-dock/wiki/Author-&-Contributors)
-
-Crystal Dock is a cool dock (desktop panel) for Linux desktop, with the focus on attractive user interface, simplicity and cross-desktop support.
-
-The current version (version 2) supports Budgie, Hyprland, KDE Plasma 6, Labwc, LXQt, Niri, Sway and Wayfire on Wayland. Other desktop environments and compositors will be considered when they run on Wayland and provide sufficient APIs. The previous version (version 1) supports KDE Plasma 5, GNOME, LXQt, Cinnamon and MATE on X11.
-
-## Main features
-
-- Smooth parabolic zooming and translucent effect
-- Four visual styles: Glass 3D, Glass 2D, Flat 2D and Metal 2D with various appearance settings
-- Supported components: Application Menu (Application Launcher), Launcher/Task Manager, Trash, Wi-Fi Manager, Volume Control, Battery Indicator, Keyboard Layout, Version Checker, Clock and (on some environments) Pager
-- Multiple docks support
-- Integration with various desktop environments / compositors: specific default launchers, special menu entries (e.g. Log Out)
-- Separate configs for separate desktop environments / compositors
-
-## Icon theme
-
-Crystal Dock simply uses the system icon theme.
-The one shown in the screenshots is Crystal Remix icon theme: https://github.com/dangvd/crystal-remix-icon-theme
-
-## License
-
-Crystal Dock is licensed under the GNU General Public License v3.0
-
-## Dependencies
-
-Crystal Dock is written in C++ and depends on:
-- Qt6 as the GUI framework
-- LayerShellQt6 for Wayland's Layer Shell integration
+It combines the aesthetic elegance of macOS and iOS docks with the productivity of Windows 11 taskbars, featuring live window hover previews, multi-instance window management, click-to-minimize, pure icon floating panels, and 60 FPS fluid auto-hide animations.
 
 ---
 
-## Build from the source code
+## ✨ Features
 
-### Build dependencies
+### 🪟 Advanced Window Previews
+* **Live Thumbnails**: High-performance, real-time window frame capture using KDE Plasma 6's native `org.kde.KWin.ScreenShot2` D-Bus interface.
+* **Side-by-Side Multi-Window Layout**: Applications with multiple open windows display cards arranged horizontally side-by-side rather than stacked vertically.
+* **Modern Window Cards**:
+  * **Title Bar**: Window/application title with elision support.
+  * **Close Button**: Red **✕** button to close any individual window directly from the preview.
+  * **Live Screenshot Body**: Scaled, high-quality picture of the running window with graceful high-resolution application icon fallbacks.
+* **Auto-Hide Lock**: The dock remains securely visible and elevated while hovering over window previews, preventing frustrating disappearances on auto-hide panels.
+* **Elevated Positioning**: Previews float cleanly above the dock icons with generous margin spacing, never overlapping the panel.
 
-Dependencies development packages: to build from the source code, Qt6, LayerShellQt6 and Wayland development packages are required.
+### 📌 Full Taskbar & Window Management
+* **Dual Dock / Taskbar Mode**: Supports both pinned launcher applications and dynamic running window tracking.
+* **Click-to-Minimize & Focus**: Clicking an active application's dock icon instantly minimizes or restores the window.
+* **Running Indicators**: Sleek status dots indicating active state and count of open windows per application.
+* **Intelligent App Matching**: Resolves desktop entries across reverse-DNS naming, binary commands, and custom `.desktop` definitions.
 
-For example, to install them on OpenSUSE, run:
+### 🎨 Visual Styles & Customization
+* **Icons-Only Mode**: Floating or docked pure-icon style without background container bars.
+* **iOS Glass Defaults**: Translucent frosted glass panel with customizable corner rounding, blur, and alpha transparency.
+* **Diverse Panel Styles**:
+  * Icons-Only (Floating & Non-Floating)
+  * Glass 3D
+  * Glass 2D
+  * Flat 2D
+  * Metal 2D
+* **Fluid 60 FPS Auto-Hide**: Ultra-smooth opacity fade transitions with an adjustable animation speed control slider.
+* **Interactive Parabolic Zoom**: Configurable magnification curve on mouse hover.
 
+### 🧩 Modular Dock Applets
+* **Application Menu / Launcher**
+* **Window Task Manager**
+* **Volume Control & Audio Output**
+* **Network / Wi-Fi Manager**
+* **Battery & Power Indicator**
+* **Digital Clock & Calendar**
+* **Trash Can**
+* **Virtual Desktop Pager**
+* **Keyboard Layout Switcher**
+
+---
+
+## 🛠️ Build and Installation
+
+### Dependencies
+
+Zeek Dock requires **Qt 6**, **LayerShellQt 6**, **Wayland Client**, and **CMake**:
+
+#### Arch Linux / Manjaro
+```bash
+sudo pacman -S base-devel cmake qt6-base qt6-wayland layer-shell-qt wayland
 ```
-$ sudo zypper install qt6-base-private-devel wayland-devel layer-shell-qt6-devel
+
+#### Fedora
+```bash
+sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtbase-private-devel layer-shell-qt-devel wayland-devel
 ```
 
-To install them on Fedora, run:
-
-```
-$ sudo dnf install qt6-qtbase-private-devel wayland-devel layer-shell-qt-devel
-```
-
-To install them on Ubuntu, run:
-
-```
-$ sudo apt install qt6-base-private-dev libwayland-dev liblayershellqtinterface-dev
+#### Ubuntu / Debian (24.04+)
+```bash
+sudo apt install cmake g++ qt6-base-dev qt6-base-private-dev liblayershellqtinterface-dev libwayland-dev
 ```
 
-### Build commands
+---
 
-To build and install, run:
+### Building from Source
 
-```
-$ cmake -S src -B build -DCMAKE_INSTALL_PREFIX=/usr
-$ cmake --build build --parallel
-$ sudo cmake --install build
-```
+```bash
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/zeek-dock.git
+cd zeek-dock
 
-After the installation, Crystal Dock can be launched from the Application list (Utilities category), or from the command line:
-```
-$ crystal-dock
-```
+# Configure and compile
+cmake -S src -B build -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build build -j$(nproc)
 
-Note that on KWin, Crystal Dock needs to be installed in order to be able to access necessary KDE Wayland protocols.
-
-To uninstall, navigate to the cloned repository and run:
-
-```
-$ sudo cmake --build build --target uninstall
+# Install system-wide
+sudo cmake --install build
 ```
 
-To execute the automated tests, run:
+Alternatively, to install for your local user only:
+```bash
+cmake -S src -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local
+cmake --build build -j$(nproc)
+cmake --install build
 ```
-$ ctest --test-dir build
+
+---
+
+## 🚀 Running Zeek Dock
+
+Launch Zeek Dock from your application launcher or via terminal:
+
+```bash
+zeek-dock &
 ```
+
+> **Note for KDE Plasma / KWin Users:**
+> Zeek Dock utilizes privileged Wayland protocols (`org_kde_plasma_window_management`) and restricted D-Bus interfaces (`org.kde.KWin.ScreenShot2`). Ensure the installed `.desktop` file (`~/.local/share/applications/zeek-dock.desktop` or `/usr/share/applications/zeek-dock.desktop`) is present so KWin grants proper permissions.
+
+---
+
+## ⚙️ Configuration
+
+* Right-click any empty area of the dock (or an applet) and select **Dock Settings** to configure:
+  * Dock position (Bottom, Top, Left, Right)
+  * Panel style (Icons-Only, Glass 3D, Flat 2D, Metal 2D)
+  * Auto-hide behavior (Always Visible, Auto-Hide, Intelligent Auto-Hide)
+  * Auto-hide fade animation speed
+  * Icon zoom scale and size
+* Config files are stored in `~/.config/zeek-dock/`.
+
+---
+
+## 📄 License
+
+Zeek Dock is licensed under the **GNU General Public License v3.0** (GPLv3).
+Based on Crystal Dock with extensive custom enhancements.

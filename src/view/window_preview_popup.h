@@ -19,34 +19,19 @@
 #ifndef CRYSTALDOCK_WINDOW_PREVIEW_POPUP_H_
 #define CRYSTALDOCK_WINDOW_PREVIEW_POPUP_H_
 
-// Phase 4: Window hover preview popup.
-//
-// Shows a small popup with window title + close button for each window of the
-// hovered task icon. Thumbnails require a compositor-specific capture backend;
-// this initial implementation is the text-only fallback which always works.
-//
-// Architecture:
-//   WindowPreviewPopup — Qt widget, shown above the dock icon for each task.
-//   It is created on-demand and destroyed (or hidden) when the mouse leaves.
-//   Does NOT steal keyboard focus (Qt::ToolTip window flag).
-//
-// Thumbnail strategy (text-only fallback active):
-//   KWin Wayland exposes org_kde_plasma_window_management for window metadata
-//   but window frame capture requires the KWin Screencast D-Bus interface
-//   (org.kde.KWin.ScreenCast / streamWindow) with PipeWire. That requires
-//   additional dependencies (pipewire, libspa) and non-trivial buffer handling.
-//   We implement ThumbnailProvider as an abstract interface; the text-only
-//   fallback is always present and logs why thumbnails are unavailable.
-//   A future commit can add a KwinPipeWireThumbnailProvider without touching
-//   this widget.
-
 #include <functional>
+#include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
+#include <QFrame>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QPixmap>
 #include <QPushButton>
 #include <QTimer>
+#include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -57,102 +42,111 @@ namespace crystaldock {
 
 // One entry shown in the preview popup for a single window.
 struct WindowPreviewEntry {
-  void* window;       // opaque handle for WindowSystem calls.
+  void* window = nullptr;
   QString title;
+  QString uuid;
+  QPixmap appIcon;
 };
 
 // Abstract interface for thumbnail providers.
-// isAvailable() must be cheap (no I/O). requestThumbnail() is async;
-// when a frame is ready it calls the provided callback on the Qt event loop.
-// A text-only fallback simply never calls the callback.
 class ThumbnailProvider {
  public:
   virtual ~ThumbnailProvider() = default;
   virtual bool isAvailable() const = 0;
-  virtual void requestThumbnail(void* windowHandle, QSize size,
+  virtual void requestThumbnail(const QString& uuid, QSize size,
                                 std::function<void(const QPixmap&)> callback) = 0;
-  virtual void cancelThumbnail(void* windowHandle) = 0;
   virtual const char* name() const = 0;
 };
 
-// TextOnlyFallbackProvider — always available, never delivers thumbnails.
-// Logs a single line explaining why on first use.
-class TextOnlyFallbackProvider : public ThumbnailProvider {
+// KwinScreenshotProvider: Captures live window thumbnails via KDE Plasma 6
+// org.kde.KWin.ScreenShot2 D-Bus interface. Runs asynchronously in a background
+// thread so the dock UI never blocks or stutters.
+class KwinScreenshotProvider : public ThumbnailProvider {
  public:
-  bool isAvailable() const override { return true; }
+  static KwinScreenshotProvider* instance();
 
-  void requestThumbnail(void*, QSize, std::function<void(const QPixmap&)>) override {
-    // Intentionally empty: text-only fallback shows titles but no thumbnails.
-    // To add real thumbnails, implement a compositor-specific ThumbnailProvider
-    // subclass (e.g. KwinPipeWireThumbnailProvider) and pass it to
-    // WindowPreviewPopup::setThumbnailProvider().
-  }
+  bool isAvailable() const override;
+  void requestThumbnail(const QString& uuid, QSize size,
+                        std::function<void(const QPixmap&)> callback) override;
+  const char* name() const override { return "KwinScreenShot2"; }
 
-  void cancelThumbnail(void*) override {}
-
-  const char* name() const override {
-    return "TextOnlyFallback (no compositor capture backend available)";
-  }
+ private:
+  KwinScreenshotProvider();
+  std::unordered_map<std::string, QPixmap> cache_;
 };
 
-// WindowPreviewPopup
-//
-// Displayed as a Qt::ToolTip-style window (no focus steal, no frame).
-// Contains one row per window: [thumbnail or icon] + title + close button.
-// Clicking a row activates the window; close button closes it.
-//
-// Lifecycle:
-//   - Created and shown by Program::showPreviewPopup() on hover timer.
-//   - Hidden when the mouse leaves both the icon and the popup (grace timer).
-//   - Deleted when the parent DockPanel is destroyed (parent ownership).
+// WindowPreviewCard: Represents a single window card inside the preview popup.
+// Styled according to the mockup:
+//   ┌─────────────────────────┐
+//   │ App/Window Name       ✕ │  <- Title bar + red close button
+//   ├─────────────────────────┤  <- Divider line
+//   │                         │
+//   │    [Live Screenshot]    │  <- Window picture
+//   │                         │
+//   └─────────────────────────┘
+class WindowPreviewCard : public QFrame {
+  Q_OBJECT
+
+ public:
+  WindowPreviewCard(const WindowPreviewEntry& entry,
+                    ThumbnailProvider* provider,
+                    QWidget* parent = nullptr);
+
+ signals:
+  void activated(void* window);
+  void closed(void* window);
+
+ protected:
+  void mousePressEvent(QMouseEvent* event) override;
+  void enterEvent(QEnterEvent* event) override;
+  void leaveEvent(QEvent* event) override;
+
+ private:
+  void* window_ = nullptr;
+  QLabel* titleLabel_ = nullptr;
+  QPushButton* closeBtn_ = nullptr;
+  QLabel* thumbLabel_ = nullptr;
+  QFrame* dividerLine_ = nullptr;
+};
+
+// WindowPreviewPopup: Container for window previews.
+// Multiple windows for the same app are arranged SIDE BY SIDE horizontally.
 class WindowPreviewPopup : public QWidget {
   Q_OBJECT
 
  public:
-  // sizePx: bounding box size for each thumbnail (width and height).
-  // provider: the thumbnail provider to use. Ownership is NOT transferred.
   explicit WindowPreviewPopup(MultiDockModel* model,
                               ThumbnailProvider* provider,
                               Qt::Orientation dockOrientation,
                               QWidget* parent = nullptr);
   ~WindowPreviewPopup() override = default;
 
-  // Populate the popup with window entries. Call before show().
+  // Populate preview cards for the given windows. Arranges them side-by-side.
   void setWindows(const std::vector<WindowPreviewEntry>& entries);
 
-  // Position the popup relative to the icon's global rect.
-  // For a bottom dock the popup appears above the icon; adjust for other edges.
-  void positionNear(const QRect& iconGlobalRect);
+  // Position popup relative to the dock icon's global rectangle, elevated above dock.
+  void positionNear(const QRect& iconGlobalRect, const QWidget* dockPanel = nullptr);
 
-  // Returns true if the mouse is currently over the popup.
   bool isHovered() const { return isHovered_; }
 
  signals:
-  // Emitted when the popup wants to close itself (mouse left both popup and icon).
   void popupClosed();
 
  protected:
   void enterEvent(QEnterEvent* e) override;
   void leaveEvent(QEvent* e) override;
-  bool eventFilter(QObject* obj, QEvent* event) override;
 
  private slots:
-  void onActivateWindow(void* window);
-  void onCloseWindow(void* window);
+  void onCardActivated(void* window);
+  void onCardClosed(void* window);
 
  private:
-  // Rebuild the UI layout for the current window list.
-  void rebuildLayout();
-
-  // Compute the preview thumbnail size respecting DPI if configured.
-  QSize effectiveThumbnailSize() const;
-
-  MultiDockModel* model_;            // Not owned.
-  ThumbnailProvider* provider_;      // Not owned.
+  MultiDockModel* model_;
+  ThumbnailProvider* provider_;
   Qt::Orientation dockOrientation_;
 
+  QHBoxLayout* cardsLayout_ = nullptr;
   std::vector<WindowPreviewEntry> entries_;
-  QVBoxLayout* mainLayout_ = nullptr;
   bool isHovered_ = false;
 };
 

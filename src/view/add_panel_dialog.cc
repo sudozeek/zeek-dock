@@ -92,7 +92,7 @@ void AddPanelDialog::setMode(Mode mode) {
 
   setWindowTitle((mode_ == Mode::Add)
                  ? QString("Add Panel") : (mode_ == Mode::Clone)
-                    ? QString("Clone Panel") : "Welcome to Crystal Dock!");
+                    ? QString("Clone Panel") : "Welcome to Zeek Dock!");
 
   ui->headerLabel->setText((mode == Mode::Welcome)
                            ? QString("Please set up your first panel.")

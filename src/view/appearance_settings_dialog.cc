@@ -112,6 +112,7 @@ void AppearanceSettingsDialog::loadData() {
   ui->floatingMargin->setValue(model_->floatingMargin());
   ui->floatingMargin->setEnabled(model_->isFloating());
   ui->bouncingLauncherIcon->setChecked(model_->bouncingLauncherIcon());
+  ui->autoHideAnimationSpeed->setValue(model_->autoHideAnimationSpeed());
 }
 
 void AppearanceSettingsDialog::resetData() {
@@ -143,12 +144,14 @@ void AppearanceSettingsDialog::resetData() {
   ui->tooltipFontSize->setValue(kDefaultTooltipFontSize);
   ui->floatingMargin->setValue(kDefaultFloatingMargin);
   ui->bouncingLauncherIcon->setChecked(kDefaultBouncingLauncherIcon);
+  ui->autoHideAnimationSpeed->setValue(kDefaultAutoHideAnimationSpeed);
 }
 
 void AppearanceSettingsDialog::saveData() {
   model_->setMinIconSize(ui->minSize->value());
   model_->setMaxIconSize(ui->maxSize->value());
   model_->setZoomingAnimationSpeed(ui->zoomingAnimationSpeed->value());
+  model_->setAutoHideAnimationSpeed(ui->autoHideAnimationSpeed->value());
 
   model_->setSpacingFactor(ui->spacingFactor->value());
   QColor backgroundColor(backgroundColor_->color());

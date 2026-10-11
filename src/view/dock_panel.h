@@ -110,6 +110,10 @@ class DockPanel : public QWidget {
     return panelStyle_ == PanelStyle::Metal2D_Floating || panelStyle_ == PanelStyle::Metal2D_NonFloating;
   }
 
+  bool isIconsOnly() {
+    return panelStyle_ == PanelStyle::IconsOnly_Floating || panelStyle_ == PanelStyle::IconsOnly_NonFloating;
+  }
+
   // position of task indicators, y-coordinate if horizontal, x if vertical.
   int taskIndicatorPos();
 
@@ -260,6 +264,8 @@ class DockPanel : public QWidget {
   void onActiveWindowChanged();
   void onWindowEnteredOutput(const WindowInfo*, const wl_output*);
   void onWindowLeftOutput(const WindowInfo*, const wl_output*);
+  void onShowingDesktopChanged(bool showing);
+  void updateFadeAnimation();
 
   void minimize() { leaveEvent(nullptr); }
 
@@ -285,7 +291,8 @@ class DockPanel : public QWidget {
     return panelStyle_ == PanelStyle::Glass3D_Floating ||
         panelStyle_ == PanelStyle::Glass2D_Floating ||
         panelStyle_ == PanelStyle::Flat2D_Floating ||
-        panelStyle_ == PanelStyle::Metal2D_Floating;
+        panelStyle_ == PanelStyle::Metal2D_Floating ||
+        panelStyle_ == PanelStyle::IconsOnly_Floating;
   }
 
   void setPosition(PanelPosition position);
@@ -306,7 +313,7 @@ class DockPanel : public QWidget {
     return showPager_ ? WindowSystem::numberOfDesktops() : 0;
   }
 
-  bool showTaskManager() { return model_->showTaskManager(dockId_); }
+  bool showTaskManager() { return true; }
 
   void initUi();
 
@@ -468,6 +475,7 @@ class DockPanel : public QWidget {
   QAction* glass2DStyleAction_;
   QAction* flat2DStyleAction_;
   QAction* metal2DStyleAction_;
+  QAction* iconsOnlyStyleAction_;
   // Actions to set the dock on a specific screen.
   std::vector<QAction*> screenActions_;
 
@@ -496,6 +504,15 @@ class DockPanel : public QWidget {
   int backgroundHeight_;
   int startBackgroundHeight_;
   int endBackgroundHeight_;
+
+  // Auto-hide smooth fade animation
+  float fadeOpacity_ = 1.0f;
+  bool isFading_ = false;
+  bool fadingOut_ = false;
+  std::unique_ptr<QTimer> fadeTimer_;
+  void startFade(bool fadeOut);
+
+  bool showingDesktop_ = false;
 
   // For recording the mouse position before doing entering animation
   // so that we can show the correct tooltip at the end of it.

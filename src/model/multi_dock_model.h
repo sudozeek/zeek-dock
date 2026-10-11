@@ -47,19 +47,20 @@ enum class PanelStyle {
     Glass3D_Floating, Glass3D_NonFloating,
     Flat2D_Floating, Flat2D_NonFloating,
     Metal2D_Floating, Metal2D_NonFloating,
-    Glass2D_Floating, Glass2D_NonFloating };
+    Glass2D_Floating, Glass2D_NonFloating,
+    IconsOnly_Floating, IconsOnly_NonFloating };
 
 constexpr int kDefaultMinSize = 48;
 constexpr int kDefaultMaxSize = 128;
 constexpr float kDefaultSpacingFactor = 0.5;
 constexpr bool kDefaultShowTooltip = true;
 constexpr int kDefaultTooltipFontSize = 24;
-constexpr float kDefaultBackgroundAlpha = 0.42;
+constexpr float kDefaultBackgroundAlpha = 0.22;
 constexpr float kDefaultBackgroundAlphaMetal2D = 0.68;
-constexpr char kDefaultBackgroundColor[] = "#638abd";
-constexpr char kDefaultBackgroundColor2D[] = "#86baff";
+constexpr char kDefaultBackgroundColor[] = "#ffffff";
+constexpr char kDefaultBackgroundColor2D[] = "#ffffff";
 constexpr char kDefaultBackgroundColorMetal2D[] = "#7381a6";
-constexpr char kDefaultBorderColor[] = "#b1c4de";
+constexpr char kDefaultBorderColor[] = "#e6edf8";
 constexpr char kDefaultBorderColorMetal2D[] = "#99addd";
 constexpr char kDefaultActiveIndicatorColor[] = "darkorange";
 constexpr char kDefaultActiveIndicatorColor2D[] = "#ffbf00";
@@ -70,6 +71,7 @@ constexpr char kDefaultInactiveIndicatorColorMetal2D[] = "cyan";
 constexpr int kDefaultFloatingMargin = 6;
 constexpr bool kDefaultBouncingLauncherIcon = true;
 constexpr int kDefaultZoomingAnimationSpeed = 16;
+constexpr int kDefaultAutoHideAnimationSpeed = 12;
 
 constexpr float kLargeClockFontScaleFactor = 1.0;
 constexpr float kMediumClockFontScaleFactor = 0.8;
@@ -345,11 +347,17 @@ class MultiDockModel : public QObject {
         panelStyle() == PanelStyle::Metal2D_NonFloating;
   }
 
+  bool isIconsOnly() {
+    return panelStyle() == PanelStyle::IconsOnly_Floating ||
+        panelStyle() == PanelStyle::IconsOnly_NonFloating;
+  }
+
   bool isFloating() {
     return panelStyle() == PanelStyle::Glass3D_Floating ||
         panelStyle() == PanelStyle::Glass2D_Floating ||
         panelStyle() == PanelStyle::Flat2D_Floating ||
-        panelStyle() == PanelStyle::Metal2D_Floating;
+        panelStyle() == PanelStyle::Metal2D_Floating ||
+        panelStyle() == PanelStyle::IconsOnly_Floating;
   }
 
   int floatingMargin() const {
@@ -377,6 +385,15 @@ class MultiDockModel : public QObject {
 
   void setZoomingAnimationSpeed(int value) {
     setAppearanceProperty(kGeneralCategory, kZoomingAnimationSpeed, value);
+  }
+
+  int autoHideAnimationSpeed() const {
+    return appearanceProperty(kGeneralCategory, kAutoHideAnimationSpeed,
+                              kDefaultAutoHideAnimationSpeed);
+  }
+
+  void setAutoHideAnimationSpeed(int value) {
+    setAppearanceProperty(kGeneralCategory, kAutoHideAnimationSpeed, value);
   }
 
   bool firstRunMultiScreen() {
@@ -660,8 +677,7 @@ class MultiDockModel : public QObject {
   }
 
   bool showTaskManager(int dockId) const {
-    return dockProperty(dockId, kGeneralCategory, kShowTaskManager,
-                        kDefaultShowTaskManager);
+    return true;
   }
 
   void setShowTaskManager(int dockId, bool value) {
@@ -872,6 +888,7 @@ class MultiDockModel : public QObject {
   static constexpr char kFloatingMargin[] = "floatingMargin";
   static constexpr char kBouncingLauncherIcon[] = "bouncingLauncherIcon";
   static constexpr char kZoomingAnimationSpeed[] = "zoomingAnimationSpeed";
+  static constexpr char kAutoHideAnimationSpeed[] = "autoHideAnimationSpeed";
 
   static constexpr char kFirstRunMultiScreen[] = "firstRunMultiScreen";
   static constexpr char kFirstRunWindowCountIndicator[] = "firstRunWindowCountIndicator";

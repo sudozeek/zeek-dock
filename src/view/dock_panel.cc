@@ -74,11 +74,9 @@ DockPanel::DockPanel(MultiDockView* parent, MultiDockModel* model, int dockId)
       parent_(parent),
       model_(model),
       dockId_(dockId),
-      aboutDialog_(QMessageBox::Information, "About Crystal Dock",
-                   QString("<h3>Crystal Dock ") + kVersion + "</h3>"
-                   + "<p>Copyright (C) 2025 Viet Dang (dangvd@gmail.com)"
-                   + "<p><a href=\"https://github.com/dangvd/crystal-dock\">https://github.com/dangvd/crystal-dock</a>"
-                   + "<p>License: GPLv3",
+      aboutDialog_(QMessageBox::Information, "About Zeek Dock",
+                   QString("<h3>Zeek Dock ") + kVersion + "</h3>"
+                   + "<p>Customized Dock for Zeek",
                    QMessageBox::Ok, this, Qt::Tool),
       addPanelDialog_(this, model, dockId),
       appearanceSettingsDialog_(this, model),
@@ -93,11 +91,14 @@ DockPanel::DockPanel(MultiDockView* parent, MultiDockModel* model, int dockId)
       isLeaving_(false),
       isAnimationActive_(false),
       isShowingPopup_(false),
-      animationTimer_(std::make_unique<QTimer>(this)) {  
+      animationTimer_(std::make_unique<QTimer>(this)),
+      fadeTimer_(std::make_unique<QTimer>(this)) {  
   setAttribute(Qt::WA_TranslucentBackground);
   setWindowFlag(Qt::FramelessWindowHint);
   setMouseTracking(true);
   setAcceptDrops(true);
+
+  connect(fadeTimer_.get(), &QTimer::timeout, this, &DockPanel::updateFadeAnimation);
 
   createMenu();
   loadDockConfig();
@@ -110,6 +111,8 @@ DockPanel::DockPanel(MultiDockView* parent, MultiDockModel* model, int dockId)
       this, SLOT(updatePager()));
   connect(WindowSystem::self(), SIGNAL(currentDesktopChanged(std::string_view)),
           this, SLOT(onCurrentDesktopChanged()));
+  connect(WindowSystem::self(), &WindowSystem::showingDesktopChanged,
+          this, &DockPanel::onShowingDesktopChanged);
   connect(WindowSystem::self(), SIGNAL(windowStateChanged(const WindowInfo*)),
           this, SLOT(onWindowStateChanged(const WindowInfo*)));
   connect(WindowSystem::self(), SIGNAL(windowTitleChanged(const WindowInfo*)),
@@ -593,8 +596,14 @@ void DockPanel::paintEvent(QPaintEvent* e) {
   }
 
   QPainter painter(this);
+  painter.setOpacity(fadeOpacity_);
 
-  if (is3D()) {
+  if (isIconsOnly()) {
+    // Pure icon dock: draw items without any background
+    for (int i = itemCount() - 1; i >= 0; --i) {
+      items_[i]->draw(&painter);
+    }
+  } else if (is3D()) {
     drawGlass3D(painter);
   } else {
     draw2D(painter);
@@ -604,6 +613,13 @@ void DockPanel::paintEvent(QPaintEvent* e) {
 }
 
 void DockPanel::drawGlass3D(QPainter& painter) {
+  if (isIconsOnly()) {
+    for (int i = itemCount() - 1; i >= 0; --i) {
+      items_[i]->draw(&painter);
+    }
+    return;
+  }
+
   if (isHorizontal()) {
     int y = isTop()
         ? isFloating() ? floatingMargin_ : 0
@@ -661,6 +677,13 @@ void DockPanel::drawGlass3D(QPainter& painter) {
 }
 
 void DockPanel::draw2D(QPainter& painter) {
+  if (isIconsOnly()) {
+    for (int i = itemCount() - 1; i >= 0; --i) {
+      items_[i]->draw(&painter);
+    }
+    return;
+  }
+
   const QColor bgColor = isGlass2D()
       ? model_->backgroundColor()
       : isFlat2D()
@@ -674,7 +697,7 @@ void DockPanel::draw2D(QPainter& painter) {
         : isFloating() ? maxHeight_ - backgroundHeight_ - floatingMargin_
                        : maxHeight_ - backgroundHeight_;
     const int r = isGlass2D()
-        ? backgroundHeight_ / 16
+        ? backgroundHeight_ / 4
         : isFlat2D()
             ? backgroundHeight_ / 4
             : 0;
@@ -687,7 +710,7 @@ void DockPanel::draw2D(QPainter& painter) {
         : isFloating() ? maxWidth_ - backgroundWidth_ - floatingMargin_
                        : maxWidth_ - backgroundWidth_;
     const int r = isGlass2D()
-        ? backgroundWidth_ / 16
+        ? backgroundWidth_ / 4
         : isFlat2D()
             ? backgroundWidth_ / 4
             : 0;
@@ -803,6 +826,10 @@ bool DockPanel::checkMouseEnter(int x, int y) {
 }
 
 bool DockPanel::intellihideShouldHide(void* excluding_window) {
+  if (showingDesktop_) {
+    return false;
+  }
+
   if (visibility_ != PanelVisibility::IntelligentAutoHide) {
     return false;
   }
@@ -849,6 +876,17 @@ bool DockPanel::intellihideShouldHide(void* excluding_window) {
 }
 
 void DockPanel::intellihideHideUnhide(void* excluding_window) {
+  if (isShowingPopup_) {
+    return;
+  }
+
+  if (showingDesktop_) {
+    if (isHidden_) {
+      setAutoHide(false);
+    }
+    return;
+  }
+
   if (visibility_ != PanelVisibility::IntelligentAutoHide) {
     return;
   }
@@ -897,6 +935,9 @@ void DockPanel::wheelEvent(QWheelEvent* e) {
 void DockPanel::enterEvent (QEnterEvent* e) {
   if (isMinimized_) {
     isEntering_ = true;
+  }
+  if (autoHide() || intellihide()) {
+    setAutoHide(false);
   }
 }
 
@@ -963,7 +1004,17 @@ void DockPanel::initUi() {
   updateLayout();
   setStrut();
   if (WindowSystem::hasAutoHideManager() && intellihideShouldHide()) {
-    setAutoHide();
+    isHidden_ = true;
+    fadeOpacity_ = 0.0f;
+    Qt::Edge edge = Qt::BottomEdge;
+    switch (position_) {
+      case PanelPosition::Top: edge = Qt::TopEdge; break;
+      case PanelPosition::Bottom: edge = Qt::BottomEdge; break;
+      case PanelPosition::Left: edge = Qt::LeftEdge; break;
+      case PanelPosition::Right: edge = Qt::RightEdge; break;
+    }
+    WindowSystem::setAutoHide(this, edge, true);
+    setMask();
   }
 }
 
@@ -974,6 +1025,15 @@ void DockPanel::addPanelSettings(QMenu* menu) {
 }
 
 void DockPanel::createMenu() {
+  menu_.addAction(QIcon::fromTheme("preferences-system"), QString("Dock Settings"), this,
+      [this] {
+        minimize();
+        QTimer::singleShot(DockPanel::kExecutionDelayMs, [this]{
+          showAppearanceSettingsDialog();
+        });
+      });
+  menu_.addSeparator();
+
   QMenu* panelMenu = menu_.addMenu("&Panel");
   panelMenu->addAction(QIcon::fromTheme("list-add"), QString("&Add Panel"),
       this, SLOT(addDock()));
@@ -1111,12 +1171,19 @@ void DockPanel::createMenu() {
                                     : PanelStyle::Metal2D_NonFloating);
       });
   metal2DStyleAction_->setCheckable(true);
+  iconsOnlyStyleAction_ = appearanceMenu->addAction(
+      QString("Style: Icons Only (No Background)"), this,
+      [this] {
+      changePanelStyle(isFloating() ? PanelStyle::IconsOnly_Floating
+                                    : PanelStyle::IconsOnly_NonFloating);
+      });
+  iconsOnlyStyleAction_->setCheckable(true);
 
   QMenu* helpMenu = menu_.addMenu(QIcon::fromTheme("help-contents"), "&Help");
   helpMenu->addAction(QIcon::fromTheme("help-contents"),
                   QString("Online &Documentation"),
                   this, SLOT(showOnlineDocumentation()));
-  helpMenu->addAction(QIcon::fromTheme("help-about"), QString("A&bout Crystal Dock"), this,
+  helpMenu->addAction(QIcon::fromTheme("help-about"), QString("A&bout Zeek Dock"), this,
       [this] {
         minimize();
         QTimer::singleShot(DockPanel::kExecutionDelayMs, [this]{
@@ -1155,6 +1222,7 @@ void DockPanel::setPanelStyle(PanelStyle panelStyle) {
   glass2DStyleAction_->setChecked(isGlass2D());
   flat2DStyleAction_->setChecked(isFlat2D());
   metal2DStyleAction_->setChecked(isMetal2D());
+  iconsOnlyStyleAction_->setChecked(isIconsOnly());
 }
 
 void DockPanel::loadDockConfig() {
@@ -1169,7 +1237,7 @@ void DockPanel::loadDockConfig() {
   pagerAction_->setVisible(WindowSystem::hasVirtualDesktopManager());
   pagerAction_->setChecked(showPager_);
 
-  taskManagerAction_->setChecked(model_->showTaskManager(dockId_));
+  taskManagerAction_->setChecked(true);
 
   showTrash_ = model_->showTrash(dockId_);
   trashAction_->setChecked(showTrash_);
@@ -1199,7 +1267,8 @@ void DockPanel::saveDockConfig() {
   model_->setVisibility(dockId_, visibility_);
   model_->setShowApplicationMenu(dockId_, showApplicationMenu_);
   model_->setShowPager(dockId_, showPager_);
-  model_->setShowTaskManager(dockId_, taskManagerAction_->isChecked());
+  taskManagerAction_->setChecked(true);
+  model_->setShowTaskManager(dockId_, true);
   model_->setShowTrash(dockId_, showTrash_);
   model_->setShowWifiManager(dockId_, showWifiManager_);
   model_->setShowVolumeControl(dockId_, showVolumeControl_);
@@ -1230,16 +1299,13 @@ void DockPanel::initApplicationMenu() {
 void DockPanel::initLaunchers() {
   for (const auto& launcherConfig : model_->launcherConfigs(dockId_)) {
     if (launcherConfig.appId == kSeparatorId || launcherConfig.appId == kLauncherSeparatorId) {
-      items_.push_back(std::make_unique<Separator>(
-          this, model_, orientation_, minSize_, maxSize_,
-          launcherConfig.appId == kLauncherSeparatorId));
-    } else {
-      QPixmap icon = loadIcon(launcherConfig.icon, kIconLoadSize);
-      items_.push_back(std::make_unique<Program>(
-          this, model_, launcherConfig.appId, launcherConfig.name, orientation_,
-          icon, minSize_, maxSize_, launcherConfig.command,
-          model_->isAppMenuEntry(launcherConfig.appId.toStdString()), /*pinned=*/true));
+      continue;
     }
+    QPixmap icon = loadIcon(launcherConfig.icon, kIconLoadSize);
+    items_.push_back(std::make_unique<Program>(
+        this, model_, launcherConfig.appId, launcherConfig.name, orientation_,
+        icon, minSize_, maxSize_, launcherConfig.command,
+        model_->isAppMenuEntry(launcherConfig.appId.toStdString()), /*pinned=*/true));
   }
 }
 
@@ -1311,6 +1377,12 @@ bool DockPanel::addTask(const WindowInfo* task) {
   QString taskIconName = QString::fromStdString(task->icon);
   QPixmap taskIcon = appIcon.isNull() && !taskIconName.isEmpty()
       ? loadIcon(taskIconName, kIconLoadSize) : QPixmap();
+  if (appIcon.isNull() && taskIcon.isNull() && !task->appId.empty()) {
+    taskIcon = loadIcon(QString::fromStdString(task->appId), kIconLoadSize);
+  }
+  if (appIcon.isNull() && taskIcon.isNull()) {
+    taskIcon = loadIcon("application-x-executable", kIconLoadSize);
+  }
   if (app && appIcon.isNull()) {
     std::cerr << "Could not find icon with name: " << app->icon.toStdString()
               << " in the current icon theme and its fallbacks."
@@ -1322,19 +1394,13 @@ bool DockPanel::addTask(const WindowInfo* task) {
   if (!model_->groupTasksByApplication()) {
     for (; i < itemCount() && items_[i]->getAppLabel() == label; ++i);
   }
-  if (!appIcon.isNull()) {
-    const auto pinned = !model_->groupTasksByApplication() &&
-                        model_->launchers(dockId_).contains(app->appId);
-    items_.insert(items_.begin() + i, std::make_unique<Program>(
-        this, model_, appId, label, orientation_, appIcon, minSize_,
-        maxSize_, app->command, /*isAppMenuEntry=*/true, pinned));
-  } else if (!taskIcon.isNull()) {
-    items_.insert(items_.begin() + i, std::make_unique<Program>(
-        this, model_, appId, label, orientation_, taskIcon, minSize_, maxSize_));
-  } else {
-    items_.insert(items_.begin() + i, std::make_unique<Program>(
-        this, model_, appId, label, orientation_, QPixmap(), minSize_, maxSize_));
-  }
+  QPixmap finalIcon = !appIcon.isNull() ? appIcon : taskIcon;
+  const QString cmd = app ? app->command : QString();
+  const auto pinned = !model_->groupTasksByApplication() && app &&
+                      model_->launchers(dockId_).contains(app->appId);
+  items_.insert(items_.begin() + i, std::make_unique<Program>(
+      this, model_, appId, label, orientation_, finalIcon, minSize_,
+      maxSize_, cmd, /*isAppMenuEntry=*/(app != nullptr), pinned));
   items_[i]->addTask(task);
 
   return true;
@@ -1627,8 +1693,9 @@ void DockPanel::updateLayout() {
     if (autoHide()) { isHidden_ = true; }
     if (intellihide()) { isHidden_ = intellihideShouldHide(); }
     update();
-    // Here we have to wait a bit before setMask() to avoid visual artifacts.
-    QTimer::singleShot(500, [this]{ setMask(); });
+    // Defer setMask() by one event loop tick (0 ms) to avoid visual artifacts
+    // while still appearing instantly on launch (was 500 ms, reduced to 0).
+    QTimer::singleShot(0, [this]{ setMask(); });
   }
 }
 
@@ -1746,7 +1813,12 @@ void DockPanel::updateLayout(int x, int y) {
   //resize(maxWidth_, maxHeight_);
   WindowSystem::setLayer(this, LayerShellQt::Window::LayerTop);
   isMinimized_ = false;
-  if (autoHide() || intellihide()) { isHidden_ = false; }
+  if (autoHide() || intellihide()) {
+    isHidden_ = false;
+    if (fadeOpacity_ < 1.0f) {
+      setAutoHide(false);
+    }
+  }
   setMask();
   updateActiveItem(x, y);
   update();
@@ -1896,37 +1968,100 @@ void DockPanel::updatePosition(PanelPosition position) {
 void DockPanel::updateVisibility(PanelVisibility visibility) {
   setVisibility(visibility);
   setStrut();
+  if (visibility_ == PanelVisibility::AlwaysVisible || visibility_ == PanelVisibility::AlwaysOnTop) {
+    fadeOpacity_ = 1.0f;
+    isFading_ = false;
+    if (fadeTimer_) { fadeTimer_->stop(); }
+    isHidden_ = false;
+  }
   setAutoHide(autoHide() || intellihideShouldHide());
   saveDockConfig();
 }
 
-void DockPanel::setAutoHide(bool on) {
-  if (isHidden_ != on) {
-    isHidden_ = on;
+void DockPanel::onShowingDesktopChanged(bool showing) {
+  showingDesktop_ = showing;
+  if (showingDesktop_) {
+    if (isHidden_) {
+      setAutoHide(false);
+    }
+  } else {
+    intellihideHideUnhide();
   }
+}
 
-  if (!WindowSystem::hasAutoHideManager()) {
-    repaint();
+void DockPanel::startFade(bool fadeOut) {
+  fadingOut_ = fadeOut;
+  isFading_ = true;
+  if (!fadeTimer_) {
+    fadeTimer_ = std::make_unique<QTimer>(this);
+    connect(fadeTimer_.get(), &QTimer::timeout, this, &DockPanel::updateFadeAnimation);
+  }
+  if (!fadeOut) {
+    isHidden_ = false;
+    if (WindowSystem::hasAutoHideManager()) {
+      Qt::Edge edge = Qt::BottomEdge;
+      switch (position_) {
+        case PanelPosition::Top: edge = Qt::TopEdge; break;
+        case PanelPosition::Bottom: edge = Qt::BottomEdge; break;
+        case PanelPosition::Left: edge = Qt::LeftEdge; break;
+        case PanelPosition::Right: edge = Qt::RightEdge; break;
+      }
+      WindowSystem::setAutoHide(this, edge, false);
+    }
     setMask();
-    return;
   }
+  fadeTimer_->start(16);
+}
 
-  Qt::Edge edge = Qt::BottomEdge;
-  switch (position_) {
-    case PanelPosition::Top:
-      edge = Qt::TopEdge;
-      break;
-    case PanelPosition::Bottom:
-      edge = Qt::BottomEdge;
-      break;
-    case PanelPosition::Left:
-      edge = Qt::LeftEdge;
-      break;
-    case PanelPosition::Right:
-      edge = Qt::RightEdge;
-      break;
+void DockPanel::updateFadeAnimation() {
+  const int speed = std::clamp(model_->autoHideAnimationSpeed(), 1, 30);
+  const float step = 0.02f * (speed / 10.0f);
+
+  if (fadingOut_) {
+    fadeOpacity_ -= step;
+    if (fadeOpacity_ <= 0.0f) {
+      fadeOpacity_ = 0.0f;
+      isFading_ = false;
+      fadeTimer_->stop();
+      isHidden_ = true;
+      if (WindowSystem::hasAutoHideManager()) {
+        Qt::Edge edge = Qt::BottomEdge;
+        switch (position_) {
+          case PanelPosition::Top: edge = Qt::TopEdge; break;
+          case PanelPosition::Bottom: edge = Qt::BottomEdge; break;
+          case PanelPosition::Left: edge = Qt::LeftEdge; break;
+          case PanelPosition::Right: edge = Qt::RightEdge; break;
+        }
+        WindowSystem::setAutoHide(this, edge, true);
+      }
+      setMask();
+    }
+  } else {
+    fadeOpacity_ += step;
+    if (fadeOpacity_ >= 1.0f) {
+      fadeOpacity_ = 1.0f;
+      isFading_ = false;
+      fadeTimer_->stop();
+    }
   }
-  WindowSystem::setAutoHide(this, edge, on);
+  repaint();
+}
+
+void DockPanel::setAutoHide(bool on) {
+  if (on) {
+    if (isShowingPopup_) {
+      return;
+    }
+    if (isHidden_ && !isFading_ && fadeOpacity_ <= 0.0f) {
+      return;
+    }
+    startFade(true);
+  } else {
+    if (!isHidden_ && !isFading_ && fadeOpacity_ >= 1.0f) {
+      return;
+    }
+    startFade(false);
+  }
 }
 
 void DockPanel::updateActiveItem(int x, int y) {

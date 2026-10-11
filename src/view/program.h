@@ -36,10 +36,11 @@ namespace crystaldock {
 struct ProgramTask {
   void* window;
   QString name;  // e.g. home -- Dolphin
+  QString uuid;  // KWin internal UUID for screenshot D-Bus API
   bool demandsAttention;
 
-  ProgramTask(void* window2, QString name2, bool demandsAttention2)
-    : window(window2), name(name2), demandsAttention(demandsAttention2) {}
+  ProgramTask(void* window2, QString name2, QString uuid2, bool demandsAttention2)
+    : window(window2), name(name2), uuid(uuid2), demandsAttention(demandsAttention2) {}
 };
 
 class Program : public QObject, public IconBasedDockItem {
@@ -167,7 +168,6 @@ class Program : public QObject, public IconBasedDockItem {
   QTimer previewTimer_;
   QTimer previewGraceTimer_;
   std::unique_ptr<WindowPreviewPopup> previewPopup_;
-  TextOnlyFallbackProvider fallbackProvider_;
 
   void startBounceAnimation();
   void updateBounceAnimation();

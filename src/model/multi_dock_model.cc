@@ -170,13 +170,7 @@ bool MultiDockModel::hasPager() const {
 const std::vector<LauncherConfig> MultiDockModel::launcherConfigs(int dockId) const {
   std::vector<LauncherConfig> entries;
   for (const auto& appId : launchers(dockId)) {
-    if (appId == kSeparatorId) {
-      entries.push_back(LauncherConfig(kSeparatorId, "", "", ""));
-      continue;
-    }
-
-    if (appId == kLauncherSeparatorId) {
-      entries.push_back(LauncherConfig(kLauncherSeparatorId, "", "", ""));
+    if (appId == kSeparatorId || appId == kLauncherSeparatorId) {
       continue;
     }
 
@@ -199,7 +193,9 @@ QStringList MultiDockModel::defaultLaunchers() {
   const auto desktopEnvItems = desktopEnv_->getDefaultLaunchers();
   launchers.reserve(desktopEnvItems.size());
   for (const auto& appId : desktopEnvItems) {
-    launchers.append(appId);
+    if (appId != kSeparatorId && appId != kLauncherSeparatorId) {
+      launchers.append(appId);
+    }
   }
 
   return launchers;

@@ -115,6 +115,10 @@ bool WlrWindowManager::showingDesktop_;
     return;
   }
 
+  if (windows_.count(window) > 0 && windows_[window]->minimized) {
+    zwlr_foreign_toplevel_handle_v1_unset_minimized(window);
+  }
+
   zwlr_foreign_toplevel_handle_v1_activate(window, seat);
 }
 

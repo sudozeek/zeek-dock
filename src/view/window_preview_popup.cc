@@ -19,126 +19,358 @@
 #include "window_preview_popup.h"
 
 #include <iostream>
+#include <thread>
+#include <unistd.h>
 
+#include <QDBusArgument>
+#include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusMessage>
+#include <QDBusUnixFileDescriptor>
+#include <QFontMetrics>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QImage>
 #include <QLabel>
+#include <QMetaObject>
 #include <QPixmap>
 #include <QPushButton>
 #include <QScreen>
 #include <QSizePolicy>
-#include <QString>
-#include <QStyleOption>
-#include <QPainter>
+#include <QVBoxLayout>
 
 namespace crystaldock {
 
 namespace {
 
-// Spacing and sizing constants.
-constexpr int kPadding = 8;
-constexpr int kRowSpacing = 6;
-constexpr int kMaxTitleWidth = 180;
-constexpr int kCloseBtnSize = 20;
+constexpr int kThumbWidth = 210;
+constexpr int kThumbHeight = 130;
+constexpr int kMaxTitleWidth = 175;
 
 }  // namespace
+
+// ============================================================================
+// KwinScreenshotProvider Implementation
+// ============================================================================
+
+KwinScreenshotProvider* KwinScreenshotProvider::instance() {
+  static KwinScreenshotProvider provider;
+  return &provider;
+}
+
+KwinScreenshotProvider::KwinScreenshotProvider() = default;
+
+bool KwinScreenshotProvider::isAvailable() const {
+  return true;
+}
+
+void KwinScreenshotProvider::requestThumbnail(
+    const QString& uuid, QSize size,
+    std::function<void(const QPixmap&)> callback) {
+  const std::string key = uuid.toStdString();
+  auto it = cache_.find(key);
+  if (it != cache_.end() && !it->second.isNull()) {
+    callback(it->second);
+    return;
+  }
+
+  // Perform screenshot capture asynchronously in background thread.
+  std::thread([this, uuid, key, size, callback]() {
+    int pipeFds[2];
+    if (pipe(pipeFds) != 0) {
+      return;
+    }
+
+    // Read end drains pipe into buffer concurrently.
+    std::vector<char> buffer;
+    std::thread reader([pipeReadFd = pipeFds[0], &buffer]() {
+      char buf[65536];
+      ssize_t n;
+      while ((n = read(pipeReadFd, buf, sizeof(buf))) > 0) {
+        buffer.insert(buffer.end(), buf, buf + n);
+      }
+      close(pipeReadFd);
+    });
+
+    QVariantMap options;
+    QDBusMessage reply;
+    {
+      QDBusInterface iface("org.kde.KWin", "/org/kde/KWin/ScreenShot2",
+                           "org.kde.KWin.ScreenShot2",
+                           QDBusConnection::sessionBus());
+      QDBusUnixFileDescriptor writeFd(pipeFds[1]);
+      close(pipeFds[1]);  // writeFd holds duplicate.
+
+      if (!uuid.isEmpty()) {
+        reply = iface.call("CaptureWindow", uuid, options,
+                           QVariant::fromValue(writeFd));
+      }
+      if (reply.type() == QDBusMessage::ErrorMessage || uuid.isEmpty()) {
+        // Fallback to active window capture if window UUID not matched.
+        reply = iface.call("CaptureActiveWindow", options,
+                           QVariant::fromValue(writeFd));
+      }
+    }  // writeFd destroyed here, closing write end in this process.
+
+    reader.join();
+
+    if (reply.type() == QDBusMessage::ErrorMessage || reply.arguments().isEmpty()) {
+      return;
+    }
+
+    // Parse image metadata from D-Bus reply.
+    const auto arg = reply.arguments()[0].value<QDBusArgument>();
+    const QVariantMap res = qdbus_cast<QVariantMap>(arg);
+    const uint width = res.value("width").toUInt();
+    const uint height = res.value("height").toUInt();
+    const uint stride = res.value("stride").toUInt();
+    const uint fmt = res.value("format").toUInt();
+
+    if (width == 0 || height == 0 || buffer.empty()) {
+      return;
+    }
+
+    const QImage rawImg(reinterpret_cast<const uchar*>(buffer.data()),
+                        width, height, stride, static_cast<QImage::Format>(fmt));
+    if (rawImg.isNull()) {
+      return;
+    }
+
+    const QImage scaled = rawImg.scaled(size, Qt::KeepAspectRatio,
+                                        Qt::SmoothTransformation);
+    const QPixmap pixmap = QPixmap::fromImage(scaled);
+
+    // Deliver thumbnail on the main GUI thread.
+    QMetaObject::invokeMethod(
+        QGuiApplication::instance(),
+        [this, key, pixmap, callback]() {
+          if (!pixmap.isNull()) {
+            cache_[key] = pixmap;
+            callback(pixmap);
+          }
+        },
+        Qt::QueuedConnection);
+  }).detach();
+}
+
+// ============================================================================
+// WindowPreviewCard Implementation
+// ============================================================================
+
+WindowPreviewCard::WindowPreviewCard(const WindowPreviewEntry& entry,
+                                     ThumbnailProvider* provider,
+                                     QWidget* parent)
+    : QFrame(parent), window_(entry.window) {
+  setCursor(Qt::PointingHandCursor);
+  setFixedWidth(kThumbWidth + 16);
+  setObjectName("WindowPreviewCard");
+  setStyleSheet(
+      "#WindowPreviewCard {"
+      "  background-color: #242429;"
+      "  border: 1px solid #3c3c44;"
+      "  border-radius: 8px;"
+      "}"
+      "#WindowPreviewCard:hover {"
+      "  background-color: #2c2c33;"
+      "  border: 1px solid #0078d4;"
+      "}");
+
+  auto* cardLayout = new QVBoxLayout(this);
+  cardLayout->setContentsMargins(6, 6, 6, 6);
+  cardLayout->setSpacing(4);
+
+  // --- Title Bar (Header) ---
+  auto* headerWidget = new QWidget(this);
+  auto* headerLayout = new QHBoxLayout(headerWidget);
+  headerLayout->setContentsMargins(2, 0, 2, 0);
+  headerLayout->setSpacing(4);
+
+  titleLabel_ = new QLabel(headerWidget);
+  titleLabel_->setStyleSheet("color: #ffffff; font-size: 11px; font-weight: bold;");
+  QFontMetrics fm(titleLabel_->font());
+  titleLabel_->setText(fm.elidedText(entry.title, Qt::ElideRight, kMaxTitleWidth));
+  titleLabel_->setToolTip(entry.title);
+  headerLayout->addWidget(titleLabel_, 1);
+
+  // Red Close Button (Mockup ✕ button)
+  closeBtn_ = new QPushButton("✕", headerWidget);
+  closeBtn_->setObjectName("closeBtn");
+  closeBtn_->setFixedSize(18, 18);
+  closeBtn_->setCursor(Qt::ArrowCursor);
+  closeBtn_->setStyleSheet(
+      "QPushButton#closeBtn {"
+      "  color: #ff5555;"
+      "  background: transparent;"
+      "  border: none;"
+      "  font-size: 12px;"
+      "  font-weight: bold;"
+      "  padding: 0px;"
+      "  border-radius: 3px;"
+      "}"
+      "QPushButton#closeBtn:hover {"
+      "  color: #ffffff;"
+      "  background-color: #e81123;"
+      "}");
+  void* winHandle = entry.window;
+  connect(closeBtn_, &QPushButton::clicked, this, [this, winHandle]() {
+    emit closed(winHandle);
+  });
+  headerLayout->addWidget(closeBtn_);
+  cardLayout->addWidget(headerWidget);
+
+  // --- Divider Line ---
+  dividerLine_ = new QFrame(this);
+  dividerLine_->setFrameShape(QFrame::HLine);
+  dividerLine_->setFixedHeight(1);
+  dividerLine_->setStyleSheet("background-color: #383840; border: none;");
+  cardLayout->addWidget(dividerLine_);
+
+  // --- Thumbnail Body ---
+  thumbLabel_ = new QLabel(this);
+  thumbLabel_->setFixedSize(kThumbWidth, kThumbHeight);
+  thumbLabel_->setAlignment(Qt::AlignCenter);
+  thumbLabel_->setStyleSheet(
+      "background-color: #19191d; border-radius: 4px; border: 1px solid #2e2e34;");
+
+  // Show app icon as fallback placeholder while live thumbnail loads.
+  if (!entry.appIcon.isNull()) {
+    thumbLabel_->setPixmap(entry.appIcon.scaled(
+        48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+  }
+  cardLayout->addWidget(thumbLabel_);
+
+  // Request live window screenshot.
+  if (provider && provider->isAvailable()) {
+    const QSize targetSize(kThumbWidth, kThumbHeight);
+    provider->requestThumbnail(
+        entry.uuid, targetSize, [this, targetSize](const QPixmap& pixmap) {
+          if (!pixmap.isNull() && thumbLabel_) {
+            thumbLabel_->setPixmap(pixmap.scaled(
+                targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+          }
+        });
+  }
+}
+
+void WindowPreviewCard::mousePressEvent(QMouseEvent* event) {
+  if (event->button() == Qt::LeftButton) {
+    emit activated(window_);
+  }
+}
+
+void WindowPreviewCard::enterEvent(QEnterEvent* /*event*/) {
+  setStyleSheet(
+      "#WindowPreviewCard {"
+      "  background-color: #2c2c33;"
+      "  border: 1px solid #0078d4;"
+      "  border-radius: 8px;"
+      "}");
+}
+
+void WindowPreviewCard::leaveEvent(QEvent* /*event*/) {
+  setStyleSheet(
+      "#WindowPreviewCard {"
+      "  background-color: #242429;"
+      "  border: 1px solid #3c3c44;"
+      "  border-radius: 8px;"
+      "}");
+}
+
+// ============================================================================
+// WindowPreviewPopup Implementation
+// ============================================================================
 
 WindowPreviewPopup::WindowPreviewPopup(MultiDockModel* model,
                                        ThumbnailProvider* provider,
                                        Qt::Orientation dockOrientation,
                                        QWidget* parent)
-    : QWidget(parent, Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint),
+    : QWidget(parent,
+              Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint),
       model_(model),
-      provider_(provider),
+      provider_(provider ? provider : KwinScreenshotProvider::instance()),
       dockOrientation_(dockOrientation) {
-  // ToolTip windows don't steal keyboard focus.
   setAttribute(Qt::WA_ShowWithoutActivating, true);
-  setAttribute(Qt::WA_TranslucentBackground, false);
+  setAttribute(Qt::WA_TranslucentBackground, true);
 
-  // Use a neutral dark styled background matching the icon theme's tooltip style.
   setStyleSheet(
-    "WindowPreviewPopup {"
-    "  background-color: #2b2b2b;"
-    "  border: 1px solid #555555;"
-    "  border-radius: 6px;"
-    "}"
-    "QLabel#titleLabel {"
-    "  color: #e0e0e0;"
-    "  font-size: 11px;"
-    "}"
-    "QPushButton#closeBtn {"
-    "  color: #aaaaaa;"
-    "  background: transparent;"
-    "  border: none;"
-    "  font-size: 14px;"
-    "  padding: 0px;"
-    "}"
-    "QPushButton#closeBtn:hover {"
-    "  color: #ff5555;"
-    "}"
-  );
+      "WindowPreviewPopup {"
+      "  background-color: rgba(22, 22, 26, 0.96);"
+      "  border: 1px solid rgba(255, 255, 255, 0.14);"
+      "  border-radius: 10px;"
+      "}");
 
-  mainLayout_ = new QVBoxLayout(this);
-  mainLayout_->setContentsMargins(kPadding, kPadding, kPadding, kPadding);
-  mainLayout_->setSpacing(kRowSpacing);
-
-  // Log thumbnail provider status once on construction.
-  static bool providerLogged = false;
-  if (!providerLogged) {
-    providerLogged = true;
-    if (provider_ && !provider_->isAvailable()) {
-      std::cerr << "[crystal-dock] Window preview: thumbnail capture unavailable — "
-                << (provider_ ? provider_->name() : "no provider")
-                << " — showing text-only popup." << std::endl;
-    } else if (!provider_) {
-      std::cerr << "[crystal-dock] Window preview: no ThumbnailProvider — text-only mode."
-                << std::endl;
-    }
-  }
+  cardsLayout_ = new QHBoxLayout(this);
+  cardsLayout_->setContentsMargins(8, 8, 8, 8);
+  cardsLayout_->setSpacing(8);
 }
 
-void WindowPreviewPopup::setWindows(const std::vector<WindowPreviewEntry>& entries) {
+void WindowPreviewPopup::setWindows(
+    const std::vector<WindowPreviewEntry>& entries) {
   entries_ = entries;
-  rebuildLayout();
+
+  // Clear existing preview cards.
+  QLayoutItem* item;
+  while ((item = cardsLayout_->takeAt(0)) != nullptr) {
+    if (item->widget()) {
+      item->widget()->deleteLater();
+    }
+    delete item;
+  }
+
+  // Create cards arranged SIDE BY SIDE horizontally.
+  for (const auto& entry : entries_) {
+    auto* card = new WindowPreviewCard(entry, provider_, this);
+    connect(card, &WindowPreviewCard::activated,
+            this, &WindowPreviewPopup::onCardActivated);
+    connect(card, &WindowPreviewCard::closed,
+            this, &WindowPreviewPopup::onCardClosed);
+    cardsLayout_->addWidget(card);
+  }
+
+  adjustSize();
 }
 
-void WindowPreviewPopup::positionNear(const QRect& iconGlobalRect) {
+void WindowPreviewPopup::positionNear(const QRect& iconGlobalRect, const QWidget* dockPanel) {
   adjustSize();
   const QSize sz = sizeHint();
 
   int x = 0;
   int y = 0;
 
-  // Place the popup on the opposite side of the dock edge from the screen centre.
-  // For a bottom dock: popup above the icon.
-  // For a top dock:    popup below the icon.
-  // For left/right:    popup to the right/left of the icon.
   if (dockOrientation_ == Qt::Horizontal) {
-    // Centre horizontally over the icon.
+    // Center horizontally over the hovered icon.
     x = iconGlobalRect.center().x() - sz.width() / 2;
-    // Above icon for bottom dock; for top dock use iconGlobalRect.bottom().
-    y = iconGlobalRect.top() - sz.height() - 4;
+
+    int dockTopGlobal = iconGlobalRect.top();
+    int dockBottomGlobal = iconGlobalRect.bottom();
+    if (dockPanel) {
+      const QPoint dockOrigin = dockPanel->mapToGlobal(QPoint(0, 0));
+      dockTopGlobal = dockOrigin.y();
+      dockBottomGlobal = dockOrigin.y() + dockPanel->height();
+    }
+
+    // Position above the dock with a clean 16px uplift gap so it never touches or overlaps the dock.
+    y = dockTopGlobal - sz.height() - 16;
     if (y < 0) {
-      // Top dock: place below instead.
-      y = iconGlobalRect.bottom() + 4;
+      // Top dock: position below the dock with a 16px gap.
+      y = dockBottomGlobal + 16;
     }
   } else {
     // Vertical dock.
     y = iconGlobalRect.center().y() - sz.height() / 2;
-    x = iconGlobalRect.right() + 4;
-    // Screen edge clipping.
-    const auto* screen = QGuiApplication::primaryScreen();
-    if (screen && x + sz.width() > screen->geometry().right()) {
-      x = iconGlobalRect.left() - sz.width() - 4;
+    int dockRightGlobal = iconGlobalRect.right();
+    if (dockPanel) {
+      dockRightGlobal = dockPanel->mapToGlobal(QPoint(dockPanel->width(), 0)).x();
     }
+    x = dockRightGlobal + 16;
   }
 
-  // Clamp to screen bounds.
+  // Clamp to screen boundaries.
   const auto* screen = QGuiApplication::primaryScreen();
   if (screen) {
     const auto sg = screen->geometry();
-    x = qBound(sg.left(), x, sg.right() - sz.width());
-    y = qBound(sg.top(), y, sg.bottom() - sz.height());
+    x = qBound(sg.left() + 8, x, sg.right() - sz.width() - 8);
+    y = qBound(sg.top() + 8, y, sg.bottom() - sz.height() - 8);
   }
 
   move(x, y);
@@ -153,135 +385,13 @@ void WindowPreviewPopup::leaveEvent(QEvent* /*e*/) {
   emit popupClosed();
 }
 
-void WindowPreviewPopup::onActivateWindow(void* window) {
+void WindowPreviewPopup::onCardActivated(void* window) {
   hide();
   WindowSystem::activateWindow(window);
 }
 
-void WindowPreviewPopup::onCloseWindow(void* window) {
+void WindowPreviewPopup::onCardClosed(void* window) {
   WindowSystem::closeWindow(window);
-  // The dock will receive a windowRemoved signal and refresh normally.
-}
-
-QSize WindowPreviewPopup::effectiveThumbnailSize() const {
-  int sizePx = model_->previewSizePx();
-  if (model_->previewSizeFromDpi()) {
-    // Convert 2 logical inches to device pixels using the primary screen's DPI.
-    const auto* screen = QGuiApplication::primaryScreen();
-    if (screen) {
-      sizePx = qRound(2.0 * screen->physicalDotsPerInch());
-    }
-  }
-  return QSize(sizePx, sizePx);
-}
-
-void WindowPreviewPopup::rebuildLayout() {
-  // Remove all existing child widgets from the layout.
-  QLayoutItem* item;
-  while ((item = mainLayout_->takeAt(0)) != nullptr) {
-    if (item->widget()) {
-      item->widget()->deleteLater();
-    }
-    delete item;
-  }
-
-  if (entries_.empty()) {
-    return;
-  }
-
-  // Phase 4: For each window we show one row:
-  //   [thumbnail-or-icon-placeholder]  [title label]  [close button]
-  // The row is clickable to activate the window.
-  // Thumbnails are provided by the ThumbnailProvider asynchronously;
-  // if the provider is text-only the thumbnail area stays hidden.
-  for (const auto& entry : entries_) {
-    QWidget* row = new QWidget(this);
-    row->setCursor(Qt::PointingHandCursor);
-    row->setToolTip(entry.title);
-
-    auto* rowLayout = new QHBoxLayout(row);
-    rowLayout->setContentsMargins(4, 2, 4, 2);
-    rowLayout->setSpacing(6);
-
-    // Thumbnail placeholder: shown as a small dark box when no capture is available.
-    // When a ThumbnailProvider delivers a real frame, we swap the pixmap in.
-    const QSize thumbSz = effectiveThumbnailSize();
-    QLabel* thumbLabel = new QLabel(row);
-    thumbLabel->setFixedSize(thumbSz);
-    thumbLabel->setStyleSheet("background-color: #1a1a1a; border-radius: 3px;");
-    thumbLabel->setAlignment(Qt::AlignCenter);
-    rowLayout->addWidget(thumbLabel);
-
-    // Request a thumbnail from the provider. If the provider is text-only this
-    // is a no-op and the placeholder stays dark.
-    if (provider_ && provider_->isAvailable()) {
-      void* windowHandle = entry.window;
-      provider_->requestThumbnail(windowHandle, thumbSz,
-          [thumbLabel, thumbSz](const QPixmap& pixmap) {
-            if (!pixmap.isNull()) {
-              // Scale preserving aspect ratio (letterbox inside the box).
-              thumbLabel->setPixmap(pixmap.scaled(
-                  thumbSz, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-            }
-          });
-    }
-
-    // Title label.
-    QLabel* titleLabel = new QLabel(entry.title, row);
-    titleLabel->setObjectName("titleLabel");
-    titleLabel->setMaximumWidth(kMaxTitleWidth);
-    titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    titleLabel->setWordWrap(false);
-    // Elide long titles on the right.
-    QFontMetrics fm(titleLabel->font());
-    titleLabel->setText(fm.elidedText(entry.title, Qt::ElideRight, kMaxTitleWidth));
-    rowLayout->addWidget(titleLabel, 1);
-
-    // Close button.
-    if (model_->previewShowCloseButton()) {
-      QPushButton* closeBtn = new QPushButton("✕", row);
-      closeBtn->setObjectName("closeBtn");
-      closeBtn->setFixedSize(kCloseBtnSize, kCloseBtnSize);
-      closeBtn->setFlat(true);
-      void* window = entry.window;
-      connect(closeBtn, &QPushButton::clicked,
-              this, [this, window]() { onCloseWindow(window); });
-      rowLayout->addWidget(closeBtn);
-    }
-
-    // Click on the row (not close btn) activates the window.
-    void* window = entry.window;
-    row->installEventFilter(this);
-    // Store the window handle in the row widget's property for retrieval in event filter.
-    row->setProperty("windowHandle", QVariant::fromValue(static_cast<quintptr>(
-        reinterpret_cast<quintptr>(window))));
-
-    mainLayout_->addWidget(row);
-  }
-
-  adjustSize();
-}
-
-// Override eventFilter to catch mouse press on the row widgets.
-// We can't use QWidget::mousePressEvent on child widgets without subclassing,
-// so we use installEventFilter on each row widget instead.
-bool WindowPreviewPopup::eventFilter(QObject* obj, QEvent* event) {
-  if (event->type() == QEvent::MouseButtonPress) {
-    auto* me = static_cast<QMouseEvent*>(event);
-    if (me->button() == Qt::LeftButton) {
-      auto* widget = qobject_cast<QWidget*>(obj);
-      if (widget) {
-        QVariant v = widget->property("windowHandle");
-        if (v.isValid()) {
-          void* window = reinterpret_cast<void*>(
-              static_cast<quintptr>(v.value<quintptr>()));
-          onActivateWindow(window);
-          return true;
-        }
-      }
-    }
-  }
-  return QWidget::eventFilter(obj, event);
 }
 
 }  // namespace crystaldock

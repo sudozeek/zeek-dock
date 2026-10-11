@@ -31,10 +31,9 @@
 namespace {
 
 void maybeCopyOldConfigOnFirstRun(const QString& configDir) {
-  // On the first run, copies the dock config from the old config location if it exists.
-  // This is for backward compatibility.
+  // On the first run, copies the dock config from old crystal-dock location if it exists.
   if (!QDir::home().exists(configDir)) {
-    const auto oldConfigDir = QDir::homePath() + "/.crystal-dock-2";
+    const auto oldConfigDir = QDir::homePath() + "/.config/crystal-dock";
     if (QDir::home().exists(oldConfigDir)) {
       std::filesystem::copy(oldConfigDir.toStdString(), configDir.toStdString(),
           std::filesystem::copy_options::recursive);
@@ -45,13 +44,11 @@ void maybeCopyOldConfigOnFirstRun(const QString& configDir) {
 }
 
 void maybeCopyPresetConfigOnFirstRun(const QString& configDir) {
-  // On the first run, copies the dock config from XDG_CONFIG_DIRS if it exists.
-  // This is mainly for package managers to pre-configure the dock.
   if (!QDir::home().exists(configDir)) {
     QStringList xdgConfigDirs =
         qEnvironmentVariable("XDG_CONFIG_DIRS").split(":", Qt::SkipEmptyParts);
     for (const auto& xdgConfigDir : xdgConfigDirs) {
-      const auto srcDir = xdgConfigDir + "/crystal-dock";
+      const auto srcDir = xdgConfigDir + "/zeek-dock";
       if (QDir::home().exists(srcDir)) {
         std::filesystem::copy(srcDir.toStdString(), configDir.toStdString(),
             std::filesystem::copy_options::recursive);
@@ -70,7 +67,7 @@ int main(int argc, char** argv) {
 
   // Enforces single instance.
   QSharedMemory sharedMemory;
-  sharedMemory.setKey("crystal-dock-key");
+  sharedMemory.setKey("zeek-dock-key");
   if (!sharedMemory.create(1 /*byte*/)) {
     // The failure might have been caused by a previous crash.
     sharedMemory.attach();
@@ -90,7 +87,7 @@ int main(int argc, char** argv) {
 
   auto configHome = qEnvironmentVariable("XDG_CONFIG_HOME").trimmed();
   if (configHome.isEmpty()) { configHome = QDir::homePath() + "/.config"; }
-  const auto configDir = configHome + "/crystal-dock";
+  const auto configDir = configHome + "/zeek-dock";
   maybeCopyOldConfigOnFirstRun(configDir);
   maybeCopyPresetConfigOnFirstRun(configDir);
   crystaldock::MultiDockModel model(configDir);

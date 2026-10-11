@@ -95,6 +95,12 @@ bool KdeWindowManager::showingDesktop_;
 /* static */ void KdeWindowManager::activateWindow(void* window_handle) {
   auto* window = static_cast<struct org_kde_plasma_window*>(window_handle);
   if (window) {
+    if (windows_.count(window) > 0 && windows_[window]->minimized) {
+      org_kde_plasma_window_set_state(
+          window,
+          0,
+          ORG_KDE_PLASMA_WINDOW_MANAGEMENT_STATE_MINIMIZED);
+    }
     org_kde_plasma_window_set_state(
         window,
         ORG_KDE_PLASMA_WINDOW_MANAGEMENT_STATE_ACTIVE,
@@ -110,15 +116,9 @@ bool KdeWindowManager::showingDesktop_;
     }
 
     if (windows_[window]->minimized || window != activeWindow_) {
-        org_kde_plasma_window_set_state(
-            window,
-            ORG_KDE_PLASMA_WINDOW_MANAGEMENT_STATE_ACTIVE,
-            ORG_KDE_PLASMA_WINDOW_MANAGEMENT_STATE_ACTIVE);
+      activateWindow(window);
     } else {
-      org_kde_plasma_window_set_state(
-          window,
-          ORG_KDE_PLASMA_WINDOW_MANAGEMENT_STATE_MINIMIZED,
-          ORG_KDE_PLASMA_WINDOW_MANAGEMENT_STATE_MINIMIZED);
+      minimizeWindow(window);
     }
   }
 }
@@ -187,8 +187,8 @@ bool KdeWindowManager::showingDesktop_;
     void *data,
     struct org_kde_plasma_window_management *org_kde_plasma_window_management,
     uint32_t state) {
-  // Ignore and use our own state.
-  //showingDesktop_ = state & ORG_KDE_PLASMA_WINDOW_MANAGEMENT_SHOW_DESKTOP_ENABLED;
+  showingDesktop_ = (state & ORG_KDE_PLASMA_WINDOW_MANAGEMENT_SHOW_DESKTOP_ENABLED) != 0;
+  emit WindowSystem::self()->showingDesktopChanged(showingDesktop_);
 }
 
 /* static */ void KdeWindowManager::window(
@@ -225,6 +225,7 @@ bool KdeWindowManager::showingDesktop_;
       org_kde_plasma_window_management_get_window_by_uuid(window_management_, uuid);
   windows_[window] = std::make_unique<WindowInfo>();
   windows_[window]->window = window;
+  windows_[window]->uuid = std::string{uuid};
   static uint32_t mapping_order = 0;
   windows_[window]->mapping_order = mapping_order++;
   uuids_[std::string{uuid}] = window;
@@ -258,7 +259,7 @@ bool KdeWindowManager::showingDesktop_;
 
   windows_[window]->appId = app_id;
 
-  if (std::string(app_id) == "crystal-dock") {
+  if (std::string(app_id) == "crystal-dock" || std::string(app_id) == "zeek-dock") {
     org_kde_plasma_window_set_state(
         window,
         ORG_KDE_PLASMA_WINDOW_MANAGEMENT_STATE_ON_ALL_DESKTOPS |

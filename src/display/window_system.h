@@ -61,6 +61,7 @@ struct WindowInfo {
   std::string icon;
   std::string desktop;
   std::string activity;
+  std::string uuid;    // KWin internal UUID for screenshot D-Bus API
   bool initialized;
   bool skipTaskbar;
   bool onAllDesktops;
@@ -129,6 +130,7 @@ class WindowSystem : public QObject {
   void windowLeftOutput(const WindowInfo*, const wl_output*);
 
   void currentActivityChanged(std::string_view);
+  void showingDesktopChanged(bool);
 
  private:
   // We need this to be non-static for the slot.

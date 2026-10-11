@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(crystal-dock)
+project(zeek-dock)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -140,21 +140,21 @@ set(SRCS
     view/task_manager_settings_dialog.ui
     view/wallpaper_settings_dialog.ui
     view/wifi_connection_dialog.ui)
-add_library(crystal-dock_lib STATIC ${SRCS})
+add_library(zeek-dock_lib STATIC ${SRCS})
 
 set(LIBS Qt6::DBus Qt6::GuiPrivate Qt6::Widgets Wayland::Client LayerShellQt::Interface)
-target_link_libraries(crystal-dock_lib ${LIBS})
+target_link_libraries(zeek-dock_lib ${LIBS})
 
-add_executable(crystal-dock main.cc)
-target_link_libraries(crystal-dock crystal-dock_lib ${LIBS})
+add_executable(zeek-dock main.cc)
+target_link_libraries(zeek-dock zeek-dock_lib ${LIBS})
 
-configure_file(crystal-dock.desktop.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/crystal-dock.desktop @ONLY)
+configure_file(zeek-dock.desktop.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/zeek-dock.desktop @ONLY)
 
 # Install
 
-install(TARGETS crystal-dock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/crystal-dock.desktop
+install(TARGETS zeek-dock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/zeek-dock.desktop
     DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications)
 
 # Uninstall
@@ -172,5 +172,5 @@ add_custom_target(uninstall COMMAND ${CMAKE_COMMAND}
 enable_testing()
 
 add_executable(application_menu_config_test model/application_menu_config_test.cc)
-target_link_libraries(application_menu_config_test Qt6::Test crystal-dock_lib ${LIBS})
+target_link_libraries(application_menu_config_test Qt6::Test zeek-dock_lib ${LIBS})
 add_test(application_menu_config_test application_menu_config_test)
